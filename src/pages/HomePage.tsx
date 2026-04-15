@@ -2,8 +2,9 @@ import { motion } from 'framer-motion';
 import { format } from 'date-fns';
 import { usePosts } from '@/hooks/usePosts';
 import { useBirthdays } from '@/hooks/useBirthdays';
+import { useResources } from '@/hooks/useResources';
 import { useAuth } from '@/contexts/AuthContext';
-import { Cake, Play } from 'lucide-react';
+import { Cake, Play, FileDown, Link2, ExternalLink } from 'lucide-react';
 import AppLayout from '@/components/AppLayout';
 
 const PostCard = ({ post }: { post: any }) => {
@@ -49,6 +50,7 @@ const PostCard = ({ post }: { post: any }) => {
 const HomePage = () => {
   const { data: posts, isLoading: postsLoading } = usePosts();
   const { data: birthdays } = useBirthdays();
+  const { data: resourcesList } = useResources();
   const { profile } = useAuth();
 
   const upcomingBirthdays = birthdays?.slice(0, 3) ?? [];
@@ -112,6 +114,38 @@ const HomePage = () => {
                     {b.daysUntil === 1 ? 'Tomorrow' : `${b.daysUntil}d`}
                   </span>
                 </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Resources Section */}
+        {resourcesList && resourcesList.length > 0 && (
+          <div className="neumorphic-sm rounded-2xl p-4 bg-card">
+            <h3 className="text-sm font-semibold text-foreground mb-3 flex items-center gap-2">
+              <FileDown className="w-4 h-4 text-primary" />
+              Resources & Files
+            </h3>
+            <div className="space-y-2">
+              {resourcesList.slice(0, 5).map((r: any) => (
+                <a
+                  key={r.id}
+                  href={r.file_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-3 p-2 rounded-xl bg-muted/50 hover:bg-muted transition-colors"
+                >
+                  <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${
+                    r.type === 'pdf' ? 'bg-destructive/10' : 'bg-primary/10'
+                  }`}>
+                    {r.type === 'pdf' ? <FileDown className="w-4 h-4 text-destructive" /> : <Link2 className="w-4 h-4 text-primary" />}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-foreground truncate">{r.title}</p>
+                    {r.description && <p className="text-[11px] text-muted-foreground truncate">{r.description}</p>}
+                  </div>
+                  <ExternalLink className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
+                </a>
               ))}
             </div>
           </div>
