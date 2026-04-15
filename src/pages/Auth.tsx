@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
-import { Eye, EyeOff, Camera, ArrowLeft } from 'lucide-react';
+import { Eye, EyeOff, Camera, Shield } from 'lucide-react';
 
 const Auth = () => {
   const [isLogin, setIsLogin] = useState(true);
@@ -18,6 +18,8 @@ const Auth = () => {
   const [profileImage, setProfileImage] = useState<File | null>(null);
   const [profilePreview, setProfilePreview] = useState<string>('');
   const [loading, setLoading] = useState(false);
+  const [isAdminMode, setIsAdminMode] = useState(false);
+  const [adminKey, setAdminKey] = useState('');
   const navigate = useNavigate();
 
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -38,19 +40,41 @@ const Auth = () => {
     return publicUrl;
   };
 
+  const promoteToAdmin = async (accessToken: string) => {
+    const { data, error } = await supabase.functions.invoke('promote-admin', {
+      body: { secret_key: adminKey },
+    });
+    if (error) throw new Error(error.message || 'Failed to validate admin key');
+    if (data?.error) throw new Error(data.error);
+    return true;
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
 
     try {
       if (isLogin) {
-        const { error } = await supabase.auth.signInWithPassword({ email, password });
+        const { data: signInData, error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
-        toast.success('Welcome back!');
+
+        if (isAdminMode && adminKey) {
+          try {
+            await promoteToAdmin(signInData.session?.access_token || '');
+            toast.success('Welcome, Admin!');
+          } catch (adminError: any) {
+            toast.error(adminError.message);
+            setLoading(false);
+            return;
+          }
+        } else {
+          toast.success('Welcome back!');
+        }
         navigate('/');
       } else {
         if (!fullName.trim()) { toast.error('Full name is required'); setLoading(false); return; }
         if (!dateOfBirth) { toast.error('Date of birth is required'); setLoading(false); return; }
+        if (isAdminMode && !adminKey) { toast.error('Admin secret key is required'); setLoading(false); return; }
 
         const { data, error } = await supabase.auth.signUp({
           email,
@@ -71,7 +95,17 @@ const Auth = () => {
             ...(imageUrl && { profile_image_url: imageUrl }),
           }).eq('id', data.user.id);
 
-          toast.success('Account created! Please check your email to verify.');
+          // If admin mode, promote after signup
+          if (isAdminMode && adminKey && data.session) {
+            try {
+              await promoteToAdmin(data.session.access_token);
+              toast.success('Admin account created!');
+            } catch (adminError: any) {
+              toast.error(`Account created but admin promotion failed: ${adminError.message}`);
+            }
+          } else {
+            toast.success('Account created!');
+          }
         }
         navigate('/');
       }
@@ -93,11 +127,19 @@ const Auth = () => {
           <motion.div
             initial={{ scale: 0.8 }}
             animate={{ scale: 1 }}
-            className="w-20 h-20 rounded-2xl bg-primary mx-auto mb-4 flex items-center justify-center"
+            className={`w-20 h-20 rounded-2xl mx-auto mb-4 flex items-center justify-center ${
+              isAdminMode ? 'bg-amber-500' : 'bg-primary'
+            }`}
           >
-            <span className="text-primary-foreground text-3xl font-bold font-display">N</span>
+            {isAdminMode ? (
+              <Shield className="w-9 h-9 text-primary-foreground" />
+            ) : (
+              <span className="text-primary-foreground text-3xl font-bold font-display">N</span>
+            )}
           </motion.div>
-          <h1 className="text-2xl font-bold font-display text-foreground">NSP App</h1>
+          <h1 className="text-2xl font-bold font-display text-foreground">
+            {isAdminMode ? 'Admin Access' : 'NSP App'}
+          </h1>
           <p className="text-muted-foreground mt-1">
             {isLogin ? 'Welcome back' : 'Create your account'}
           </p>
@@ -187,22 +229,54 @@ const Auth = () => {
               </div>
             </div>
 
+            {/* Admin Key Field */}
+            <AnimatePresence>
+              {isAdminMode && (
+                <motion.div
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: 'auto' }}
+                  exit={{ opacity: 0, height: 0 }}
+                >
+                  <Label htmlFor="adminKey" className="text-foreground">Admin Secret Key</Label>
+                  <Input
+                    id="adminKey"
+                    type="password"
+                    value={adminKey}
+                    onChange={(e) => setAdminKey(e.target.value)}
+                    placeholder="Enter admin secret key"
+                    className="mt-1 bg-muted border-0 neumorphic-inset"
+                  />
+                </motion.div>
+              )}
+            </AnimatePresence>
+
             <Button
               type="submit"
               disabled={loading}
-              className="w-full bg-primary text-primary-foreground hover:opacity-90 rounded-xl h-12 text-base font-medium"
+              className={`w-full text-primary-foreground hover:opacity-90 rounded-xl h-12 text-base font-medium ${
+                isAdminMode ? 'bg-amber-500 hover:bg-amber-600' : 'bg-primary'
+              }`}
             >
               {loading ? 'Please wait...' : isLogin ? 'Sign In' : 'Create Account'}
             </Button>
           </form>
 
-          <div className="mt-4 text-center">
+          <div className="mt-4 space-y-2 text-center">
             <button
               onClick={() => setIsLogin(!isLogin)}
               className="text-primary text-sm font-medium"
             >
               {isLogin ? "Don't have an account? Sign Up" : 'Already have an account? Sign In'}
             </button>
+            <div>
+              <button
+                onClick={() => setIsAdminMode(!isAdminMode)}
+                className="text-muted-foreground text-xs flex items-center gap-1 mx-auto"
+              >
+                <Shield className="w-3 h-3" />
+                {isAdminMode ? 'Switch to User Mode' : 'Admin Access'}
+              </button>
+            </div>
           </div>
         </div>
       </motion.div>
