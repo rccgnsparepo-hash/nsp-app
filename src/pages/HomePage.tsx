@@ -1,0 +1,139 @@
+import { motion } from 'framer-motion';
+import { format } from 'date-fns';
+import { usePosts } from '@/hooks/usePosts';
+import { useBirthdays } from '@/hooks/useBirthdays';
+import { useAuth } from '@/contexts/AuthContext';
+import { Cake, Play } from 'lucide-react';
+import AppLayout from '@/components/AppLayout';
+
+const PostCard = ({ post }: { post: any }) => {
+  const getYoutubeId = (url: string) => {
+    const match = url?.match(/(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=))([^&?#]+)/);
+    return match?.[1];
+  };
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="neumorphic rounded-2xl overflow-hidden bg-card mb-4"
+    >
+      {post.type === 'image' && post.image_url && (
+        <img src={post.image_url} alt={post.caption || ''} className="w-full aspect-video object-cover" loading="lazy" />
+      )}
+      {post.type === 'youtube' && post.video_url && (
+        <div className="aspect-video">
+          <iframe
+            src={`https://www.youtube.com/embed/${getYoutubeId(post.video_url)}`}
+            className="w-full h-full"
+            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+            allowFullScreen
+          />
+        </div>
+      )}
+      {post.type === 'video' && post.video_url && (
+        <video src={post.video_url} controls className="w-full aspect-video object-cover" />
+      )}
+      {post.caption && (
+        <div className="p-4">
+          <p className="text-foreground text-sm">{post.caption}</p>
+          <p className="text-muted-foreground text-xs mt-2">
+            {format(new Date(post.created_at), 'MMM d, yyyy · h:mm a')}
+          </p>
+        </div>
+      )}
+    </motion.div>
+  );
+};
+
+const HomePage = () => {
+  const { data: posts, isLoading: postsLoading } = usePosts();
+  const { data: birthdays } = useBirthdays();
+  const { profile } = useAuth();
+
+  const upcomingBirthdays = birthdays?.slice(0, 3) ?? [];
+  const todayBirthdays = birthdays?.filter(b => b.daysUntil === 0) ?? [];
+
+  return (
+    <AppLayout>
+      {/* Header */}
+      <div className="sticky top-0 z-40 glass px-4 py-3 border-b border-border">
+        <div className="flex items-center justify-between">
+          <h1 className="text-xl font-bold font-display text-foreground">NSP App</h1>
+          <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center">
+            <span className="text-primary-foreground text-sm font-bold">
+              {profile?.full_name?.[0]?.toUpperCase() || 'N'}
+            </span>
+          </div>
+        </div>
+      </div>
+
+      <div className="p-4 space-y-4">
+        {/* Birthday Banner */}
+        {todayBirthdays.length > 0 && (
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="bg-accent rounded-2xl p-4 neumorphic"
+          >
+            <div className="flex items-center gap-2 mb-2">
+              <Cake className="w-5 h-5 text-primary" />
+              <h3 className="font-semibold text-foreground">🎉 Happy Birthday!</h3>
+            </div>
+            {todayBirthdays.map(b => (
+              <p key={b.id} className="text-sm text-foreground">
+                {b.full_name} is celebrating today!
+              </p>
+            ))}
+          </motion.div>
+        )}
+
+        {/* Upcoming Birthdays */}
+        {upcomingBirthdays.length > 0 && todayBirthdays.length === 0 && (
+          <div className="neumorphic-sm rounded-2xl p-4 bg-card">
+            <div className="flex items-center gap-2 mb-3">
+              <Cake className="w-4 h-4 text-primary" />
+              <h3 className="text-sm font-semibold text-foreground">Upcoming Birthdays</h3>
+            </div>
+            <div className="flex gap-3 overflow-x-auto pb-1">
+              {upcomingBirthdays.map(b => (
+                <div key={b.id} className="flex flex-col items-center min-w-[60px]">
+                  <div className="w-10 h-10 rounded-full bg-muted overflow-hidden">
+                    {b.profile_image_url ? (
+                      <img src={b.profile_image_url} alt={b.full_name} className="w-full h-full object-cover" />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center text-muted-foreground text-sm font-medium">
+                        {b.full_name[0]}
+                      </div>
+                    )}
+                  </div>
+                  <span className="text-[10px] text-foreground mt-1 text-center truncate w-full">{b.full_name.split(' ')[0]}</span>
+                  <span className="text-[10px] text-primary font-medium">
+                    {b.daysUntil === 1 ? 'Tomorrow' : `${b.daysUntil}d`}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Posts Feed */}
+        {postsLoading ? (
+          <div className="space-y-4">
+            {[1, 2, 3].map(i => (
+              <div key={i} className="neumorphic rounded-2xl bg-card h-64 animate-pulse" />
+            ))}
+          </div>
+        ) : posts && posts.length > 0 ? (
+          posts.map(post => <PostCard key={post.id} post={post} />)
+        ) : (
+          <div className="text-center py-16">
+            <p className="text-muted-foreground">No posts yet</p>
+          </div>
+        )}
+      </div>
+    </AppLayout>
+  );
+};
+
+export default HomePage;
