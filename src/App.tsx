@@ -4,12 +4,14 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
+import { ThemeProvider } from "@/contexts/ThemeContext";
 import Auth from "./pages/Auth";
 import HomePage from "./pages/HomePage";
 import PrayerPage from "./pages/PrayerPage";
 import GalleryPage from "./pages/GalleryPage";
 import ProfilePage from "./pages/ProfilePage";
 import AdminPage from "./pages/AdminPage";
+import CreatePostPage from "./pages/CreatePostPage";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -35,6 +37,7 @@ const AppRoutes = () => (
     <Route path="/prayer" element={<ProtectedRoute><PrayerPage /></ProtectedRoute>} />
     <Route path="/gallery" element={<ProtectedRoute><GalleryPage /></ProtectedRoute>} />
     <Route path="/profile" element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
+    <Route path="/create" element={<ProtectedRoute><CreatePostPage /></ProtectedRoute>} />
     <Route path="/admin" element={<ProtectedRoute><AdminPage /></ProtectedRoute>} />
     <Route path="*" element={<NotFound />} />
   </Routes>
@@ -47,7 +50,9 @@ const App = () => (
       <Sonner />
       <BrowserRouter>
         <AuthProvider>
-          <AppRoutes />
+          <ThemeProvider>
+            <AppRoutes />
+          </ThemeProvider>
         </AuthProvider>
       </BrowserRouter>
     </TooltipProvider>

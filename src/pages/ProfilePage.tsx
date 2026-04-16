@@ -1,22 +1,41 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { useAuth } from '@/contexts/AuthContext';
+import { useTheme } from '@/contexts/ThemeContext';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/components/AppLayout';
-import { Camera, LogOut, Save } from 'lucide-react';
+import { Camera, LogOut, Save, Palette, Sun, Moon, Sparkles, Minus } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+
+const themes = [
+  { id: 'light' as const, label: 'Light', icon: Sun },
+  { id: 'dark' as const, label: 'Dark', icon: Moon },
+  { id: 'cyberpunk' as const, label: 'Cyber', icon: Sparkles },
+  { id: 'minimal' as const, label: 'Minimal', icon: Minus },
+];
 
 const ProfilePage = () => {
   const { profile, user, signOut, refreshProfile } = useAuth();
+  const { theme, setTheme } = useTheme();
   const navigate = useNavigate();
   const [editing, setEditing] = useState(false);
   const [fullName, setFullName] = useState(profile?.full_name || '');
   const [dob, setDob] = useState(profile?.date_of_birth || '');
+  const [bio, setBio] = useState(profile?.bio || '');
   const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (profile) {
+      setFullName(profile.full_name || '');
+      setDob(profile.date_of_birth || '');
+      setBio(profile.bio || '');
+    }
+  }, [profile]);
 
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -41,6 +60,7 @@ const ProfilePage = () => {
       const { error } = await supabase.from('profiles').update({
         full_name: fullName,
         date_of_birth: dob || null,
+        bio: bio || null,
       }).eq('id', user.id);
       if (error) throw error;
       await refreshProfile();
@@ -73,9 +93,7 @@ const ProfilePage = () => {
                 <img src={profile.profile_image_url} alt="" className="w-full h-full object-cover" />
               ) : (
                 <div className="w-full h-full bg-muted flex items-center justify-center">
-                  <span className="text-3xl font-bold text-muted-foreground">
-                    {profile?.full_name?.[0]?.toUpperCase() || '?'}
-                  </span>
+                  <span className="text-3xl font-bold text-muted-foreground">{profile?.full_name?.[0]?.toUpperCase() || '?'}</span>
                 </div>
               )}
             </div>
@@ -86,7 +104,30 @@ const ProfilePage = () => {
           </label>
           <h2 className="mt-3 text-lg font-semibold text-foreground">{profile?.full_name}</h2>
           <p className="text-sm text-muted-foreground">{profile?.email}</p>
+          {profile?.bio && <p className="text-sm text-foreground mt-1 text-center max-w-[250px]">{profile.bio}</p>}
         </motion.div>
+
+        {/* Theme Picker */}
+        <div className="neumorphic rounded-2xl p-4 bg-card">
+          <div className="flex items-center gap-2 mb-3">
+            <Palette className="w-4 h-4 text-primary" />
+            <h3 className="font-semibold text-foreground text-sm">Theme</h3>
+          </div>
+          <div className="grid grid-cols-4 gap-2">
+            {themes.map(t => (
+              <button
+                key={t.id}
+                onClick={() => setTheme(t.id)}
+                className={`flex flex-col items-center gap-1.5 p-3 rounded-xl transition-all ${
+                  theme === t.id ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'
+                }`}
+              >
+                <t.icon className="w-5 h-5" />
+                <span className="text-[10px] font-medium">{t.label}</span>
+              </button>
+            ))}
+          </div>
+        </div>
 
         {/* Profile Details */}
         <div className="neumorphic rounded-2xl p-4 bg-card space-y-4">
@@ -95,11 +136,7 @@ const ProfilePage = () => {
             <button
               onClick={() => {
                 if (editing) handleSave();
-                else {
-                  setFullName(profile?.full_name || '');
-                  setDob(profile?.date_of_birth || '');
-                  setEditing(true);
-                }
+                else setEditing(true);
               }}
               className="text-primary text-sm font-medium"
             >
@@ -112,6 +149,10 @@ const ProfilePage = () => {
               <div>
                 <Label className="text-foreground">Full Name</Label>
                 <Input value={fullName} onChange={(e) => setFullName(e.target.value)} className="mt-1 bg-muted border-0 neumorphic-inset" />
+              </div>
+              <div>
+                <Label className="text-foreground">Bio</Label>
+                <Textarea value={bio} onChange={(e) => setBio(e.target.value)} placeholder="Tell us about yourself..." className="mt-1 bg-muted border-0 neumorphic-inset resize-none" rows={3} />
               </div>
               <div>
                 <Label className="text-foreground">Date of Birth</Label>
@@ -128,6 +169,10 @@ const ProfilePage = () => {
                 <span className="text-sm text-muted-foreground">Email</span>
                 <span className="text-sm text-foreground">{profile?.email}</span>
               </div>
+              <div className="flex justify-between py-2 border-b border-border">
+                <span className="text-sm text-muted-foreground">Bio</span>
+                <span className="text-sm text-foreground">{profile?.bio || 'Not set'}</span>
+              </div>
               <div className="flex justify-between py-2">
                 <span className="text-sm text-muted-foreground">Birthday</span>
                 <span className="text-sm text-foreground">{profile?.date_of_birth || 'Not set'}</span>
@@ -136,7 +181,6 @@ const ProfilePage = () => {
           )}
         </div>
 
-        {/* Sign Out */}
         <Button
           onClick={handleSignOut}
           variant="outline"
