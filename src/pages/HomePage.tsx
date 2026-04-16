@@ -1,57 +1,46 @@
+import { useState, useCallback, useRef, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { format } from 'date-fns';
 import { usePosts } from '@/hooks/usePosts';
 import { useBirthdays } from '@/hooks/useBirthdays';
 import { useResources } from '@/hooks/useResources';
 import { useAuth } from '@/contexts/AuthContext';
-import { Cake, Play, FileDown, Link2, ExternalLink } from 'lucide-react';
+import PostCard from '@/components/PostCard';
+import { Cake, FileDown, Link2, ExternalLink } from 'lucide-react';
 import AppLayout from '@/components/AppLayout';
 
-const PostCard = ({ post }: { post: any }) => {
-  const getYoutubeId = (url: string) => {
-    const match = url?.match(/(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=))([^&?#]+)/);
-    return match?.[1];
-  };
-
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      className="neumorphic rounded-2xl overflow-hidden bg-card mb-4"
-    >
-      {post.type === 'image' && post.image_url && (
-        <img src={post.image_url} alt={post.caption || ''} className="w-full aspect-video object-cover" loading="lazy" />
-      )}
-      {post.type === 'youtube' && post.video_url && (
-        <div className="aspect-video">
-          <iframe
-            src={`https://www.youtube.com/embed/${getYoutubeId(post.video_url)}`}
-            className="w-full h-full"
-            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-            allowFullScreen
-          />
-        </div>
-      )}
-      {post.type === 'video' && post.video_url && (
-        <video src={post.video_url} controls className="w-full aspect-video object-cover" />
-      )}
-      {post.caption && (
-        <div className="p-4">
-          <p className="text-foreground text-sm">{post.caption}</p>
-          <p className="text-muted-foreground text-xs mt-2">
-            {format(new Date(post.created_at), 'MMM d, yyyy · h:mm a')}
-          </p>
-        </div>
-      )}
-    </motion.div>
-  );
-};
-
 const HomePage = () => {
-  const { data: posts, isLoading: postsLoading } = usePosts();
+  const [page, setPage] = useState(0);
+  const [allPosts, setAllPosts] = useState<any[]>([]);
+  const { data: posts, isLoading: postsLoading } = usePosts(page);
   const { data: birthdays } = useBirthdays();
   const { data: resourcesList } = useResources();
   const { profile } = useAuth();
+  const loaderRef = useRef<HTMLDivElement>(null);
+
+  // Accumulate posts as pages load
+  useEffect(() => {
+    if (posts && posts.length > 0) {
+      setAllPosts(prev => {
+        const ids = new Set(prev.map(p => p.id));
+        const newPosts = posts.filter((p: any) => !ids.has(p.id));
+        return [...prev, ...newPosts];
+      });
+    }
+  }, [posts]);
+
+  // Infinite scroll
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting && posts && posts.length === 10) {
+          setPage(p => p + 1);
+        }
+      },
+      { threshold: 0.1 }
+    );
+    if (loaderRef.current) observer.observe(loaderRef.current);
+    return () => observer.disconnect();
+  }, [posts]);
 
   const upcomingBirthdays = birthdays?.slice(0, 3) ?? [];
   const todayBirthdays = birthdays?.filter(b => b.daysUntil === 0) ?? [];
@@ -62,10 +51,14 @@ const HomePage = () => {
       <div className="sticky top-0 z-40 glass px-4 py-3 border-b border-border">
         <div className="flex items-center justify-between">
           <h1 className="text-xl font-bold font-display text-foreground">NSP App</h1>
-          <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center">
-            <span className="text-primary-foreground text-sm font-bold">
-              {profile?.full_name?.[0]?.toUpperCase() || 'N'}
-            </span>
+          <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center overflow-hidden">
+            {profile?.profile_image_url ? (
+              <img src={profile.profile_image_url} alt="" className="w-full h-full object-cover" />
+            ) : (
+              <span className="text-primary-foreground text-sm font-bold">
+                {profile?.full_name?.[0]?.toUpperCase() || 'N'}
+              </span>
+            )}
           </div>
         </div>
       </div>
@@ -152,14 +145,19 @@ const HomePage = () => {
         )}
 
         {/* Posts Feed */}
-        {postsLoading ? (
+        {postsLoading && allPosts.length === 0 ? (
           <div className="space-y-4">
             {[1, 2, 3].map(i => (
               <div key={i} className="neumorphic rounded-2xl bg-card h-64 animate-pulse" />
             ))}
           </div>
-        ) : posts && posts.length > 0 ? (
-          posts.map(post => <PostCard key={post.id} post={post} />)
+        ) : allPosts.length > 0 ? (
+          <>
+            {allPosts.map(post => <PostCard key={post.id} post={post} />)}
+            <div ref={loaderRef} className="h-10 flex items-center justify-center">
+              {postsLoading && <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />}
+            </div>
+          </>
         ) : (
           <div className="text-center py-16">
             <p className="text-muted-foreground">No posts yet</p>

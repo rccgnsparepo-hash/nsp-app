@@ -35,6 +35,77 @@ export type Database = {
         }
         Relationships: []
       }
+      post_comments: {
+        Row: {
+          content: string
+          created_at: string
+          id: string
+          parent_id: string | null
+          post_id: string
+          user_id: string
+        }
+        Insert: {
+          content: string
+          created_at?: string
+          id?: string
+          parent_id?: string | null
+          post_id: string
+          user_id: string
+        }
+        Update: {
+          content?: string
+          created_at?: string
+          id?: string
+          parent_id?: string | null
+          post_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "post_comments_parent_id_fkey"
+            columns: ["parent_id"]
+            isOneToOne: false
+            referencedRelation: "post_comments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "post_comments_post_id_fkey"
+            columns: ["post_id"]
+            isOneToOne: false
+            referencedRelation: "posts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      post_likes: {
+        Row: {
+          created_at: string
+          id: string
+          post_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          post_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          post_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "post_likes_post_id_fkey"
+            columns: ["post_id"]
+            isOneToOne: false
+            referencedRelation: "posts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       posts: {
         Row: {
           caption: string | null
@@ -42,6 +113,7 @@ export type Database = {
           id: string
           image_url: string | null
           type: string
+          user_id: string | null
           video_url: string | null
         }
         Insert: {
@@ -50,6 +122,7 @@ export type Database = {
           id?: string
           image_url?: string | null
           type?: string
+          user_id?: string | null
           video_url?: string | null
         }
         Update: {
@@ -58,6 +131,7 @@ export type Database = {
           id?: string
           image_url?: string | null
           type?: string
+          user_id?: string | null
           video_url?: string | null
         }
         Relationships: []
@@ -114,28 +188,34 @@ export type Database = {
       }
       profiles: {
         Row: {
+          bio: string | null
           created_at: string | null
           date_of_birth: string | null
           email: string | null
           full_name: string
           id: string
           profile_image_url: string | null
+          theme_preference: string | null
         }
         Insert: {
+          bio?: string | null
           created_at?: string | null
           date_of_birth?: string | null
           email?: string | null
           full_name: string
           id: string
           profile_image_url?: string | null
+          theme_preference?: string | null
         }
         Update: {
+          bio?: string | null
           created_at?: string | null
           date_of_birth?: string | null
           email?: string | null
           full_name?: string
           id?: string
           profile_image_url?: string | null
+          theme_preference?: string | null
         }
         Relationships: []
       }
