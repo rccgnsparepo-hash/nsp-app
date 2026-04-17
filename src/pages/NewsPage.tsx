@@ -37,7 +37,7 @@ const NewsPage = () => {
       </div>
 
       <div className="p-4 space-y-3">
-        {isLoading && !news?.length ? (
+        {isLoading && !(news && news.length) ? (
           [1, 2, 3].map(i => <div key={i} className="h-32 rounded-2xl bg-card animate-pulse" />)
         ) : (news?.length ?? 0) === 0 ? (
           <p className="text-center text-muted-foreground py-12">No news available</p>
