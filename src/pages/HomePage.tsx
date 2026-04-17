@@ -1,12 +1,15 @@
-import { useState, useCallback, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { usePosts } from '@/hooks/usePosts';
 import { useBirthdays } from '@/hooks/useBirthdays';
 import { useResources } from '@/hooks/useResources';
+import { useTrendingPosts, useTrendingPrayer, useMemeOfTheDay } from '@/hooks/useTrending';
+import { useNews } from '@/hooks/useNews';
 import { useAuth } from '@/contexts/AuthContext';
 import PostCard from '@/components/PostCard';
-import { Cake, FileDown, Link2, ExternalLink } from 'lucide-react';
+import { Cake, FileDown, Link2, ExternalLink, Flame, Sparkles, HandHeart, Newspaper } from 'lucide-react';
 import AppLayout from '@/components/AppLayout';
+import { useNavigate } from 'react-router-dom';
 
 const HomePage = () => {
   const [page, setPage] = useState(0);
@@ -14,7 +17,12 @@ const HomePage = () => {
   const { data: posts, isLoading: postsLoading } = usePosts(page);
   const { data: birthdays } = useBirthdays();
   const { data: resourcesList } = useResources();
+  const { data: trending } = useTrendingPosts(3);
+  const { data: trendingPrayer } = useTrendingPrayer();
+  const { data: memeOfDay } = useMemeOfTheDay();
+  const { data: news } = useNews('world');
   const { profile } = useAuth();
+  const navigate = useNavigate();
   const loaderRef = useRef<HTMLDivElement>(null);
 
   // Accumulate posts as pages load
@@ -142,6 +150,73 @@ const HomePage = () => {
               ))}
             </div>
           </div>
+        )}
+
+        {/* Trending row */}
+        {(trending && trending.length > 0) || trendingPrayer || memeOfDay ? (
+          <div className="space-y-3">
+            <h3 className="text-sm font-semibold text-foreground flex items-center gap-2 px-1">
+              <Flame className="w-4 h-4 text-destructive" /> Trending Now
+            </h3>
+            <div className="grid grid-cols-2 gap-2">
+              {memeOfDay && (
+                <button
+                  onClick={() => navigate('/memes')}
+                  className="neumorphic-sm rounded-2xl overflow-hidden bg-card text-left"
+                >
+                  <img src={memeOfDay.image_url} alt="" className="w-full h-24 object-cover" loading="lazy" />
+                  <div className="p-2">
+                    <p className="text-[10px] font-semibold text-primary flex items-center gap-1">
+                      <Sparkles className="w-3 h-3" /> Meme of the Day
+                    </p>
+                    <p className="text-xs text-foreground truncate">{memeOfDay.title || 'Tap to view'}</p>
+                  </div>
+                </button>
+              )}
+              {trendingPrayer && (
+                <button
+                  onClick={() => navigate('/prayer')}
+                  className="neumorphic-sm rounded-2xl p-3 bg-card text-left flex flex-col justify-between"
+                >
+                  <p className="text-[10px] font-semibold text-primary flex items-center gap-1">
+                    <HandHeart className="w-3 h-3" /> Prayer of the Day
+                  </p>
+                  <p className="text-xs text-foreground line-clamp-3 mt-1">{trendingPrayer.message}</p>
+                  <p className="text-[10px] text-muted-foreground mt-1">{trendingPrayer._amens} Amens</p>
+                </button>
+              )}
+            </div>
+            {trending && trending.length > 0 && (
+              <div className="flex gap-2 overflow-x-auto pb-1">
+                {trending.map(t => (
+                  <div key={t.id} className="min-w-[140px] neumorphic-sm rounded-2xl p-3 bg-card flex-shrink-0">
+                    <p className="text-[10px] font-semibold text-destructive flex items-center gap-1 mb-1">
+                      <Flame className="w-3 h-3" /> {t._likes + t._comments} engagements
+                    </p>
+                    <p className="text-xs text-foreground line-clamp-3">{t.caption || 'Untitled post'}</p>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        ) : null}
+
+        {/* News strip */}
+        {news && news.length > 0 && (
+          <button
+            onClick={() => navigate('/news')}
+            className="w-full neumorphic-sm rounded-2xl p-3 bg-card flex items-center gap-3 text-left"
+          >
+            {news[0].image_url && (
+              <img src={news[0].image_url} alt="" className="w-14 h-14 rounded-xl object-cover flex-shrink-0" loading="lazy" />
+            )}
+            <div className="flex-1 min-w-0">
+              <p className="text-[10px] font-semibold text-primary flex items-center gap-1">
+                <Newspaper className="w-3 h-3" /> Latest News
+              </p>
+              <p className="text-xs text-foreground line-clamp-2 mt-0.5">{news[0].title}</p>
+            </div>
+          </button>
         )}
 
         {/* Posts Feed */}

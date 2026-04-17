@@ -17,6 +17,7 @@ import CreatePostPage from "./pages/CreatePostPage";
 import VideosPage from "./pages/VideosPage";
 import NewsPage from "./pages/NewsPage";
 import MemesPage from "./pages/MemesPage";
+import ResetPasswordPage from "./pages/ResetPasswordPage";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -45,6 +46,7 @@ const AppRoutes = () => {
   return (
     <Routes>
       <Route path="/auth" element={<AuthRoute><Auth /></AuthRoute>} />
+      <Route path="/reset-password" element={<ResetPasswordPage />} />
       <Route path="/" element={<ProtectedRoute><HomePage /></ProtectedRoute>} />
       <Route path="/videos" element={<ProtectedRoute><VideosPage /></ProtectedRoute>} />
       <Route path="/news" element={<ProtectedRoute><NewsPage /></ProtectedRoute>} />

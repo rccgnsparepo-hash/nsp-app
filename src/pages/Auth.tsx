@@ -268,6 +268,24 @@ const Auth = () => {
             >
               {isLogin ? "Don't have an account? Sign Up" : 'Already have an account? Sign In'}
             </button>
+            {isLogin && (
+              <div>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    if (!email) { toast.error('Enter your email first'); return; }
+                    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+                      redirectTo: `${window.location.origin}/reset-password`,
+                    });
+                    if (error) toast.error(error.message);
+                    else toast.success('Check your email for a reset link');
+                  }}
+                  className="text-muted-foreground text-xs hover:text-foreground"
+                >
+                  Forgot password?
+                </button>
+              </div>
+            )}
             <div>
               <button
                 onClick={() => setIsAdminMode(!isAdminMode)}
