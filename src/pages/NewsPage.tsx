@@ -13,6 +13,7 @@ const CATEGORIES = [
 const NewsPage = () => {
   const [category, setCategory] = useState('world');
   const { data: news, isLoading } = useNews(category);
+  const items = news ?? [];
 
   return (
     <AppLayout>
@@ -37,12 +38,12 @@ const NewsPage = () => {
       </div>
 
       <div className="p-4 space-y-3">
-        {isLoading && (!news || news.length === 0) ? (
+        {isLoading && items.length === 0 ? (
           [1, 2, 3].map(i => <div key={i} className="h-32 rounded-2xl bg-card animate-pulse" />)
-        ) : !news || news.length === 0 ? (
+        ) : items.length === 0 ? (
           <p className="text-center text-muted-foreground py-12">No news available</p>
         ) : (
-          news.map((n, i) => (
+          items.map((n, i) => (
             <motion.a
               key={n.id}
               href={n.url}
