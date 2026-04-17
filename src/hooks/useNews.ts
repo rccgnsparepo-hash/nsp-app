@@ -1,11 +1,29 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 
+type NewsItem = {
+  id: string;
+  category: string;
+  title: string;
+  description: string | null;
+  url: string;
+  image_url: string | null;
+  source: string | null;
+  published_at: string | null;
+};
+
+type Meme = {
+  id: string;
+  external_id: string;
+  title: string | null;
+  image_url: string;
+  source: string | null;
+};
+
 export const useNews = (category: string = 'world') => {
-  return useQuery({
+  return useQuery<NewsItem[]>({
     queryKey: ['news', category],
     queryFn: async () => {
-      // Trigger refresh (cached server-side)
       await supabase.functions.invoke('fetch-news', { body: { category } });
       const { data } = await supabase
         .from('news_cache')
@@ -13,14 +31,14 @@ export const useNews = (category: string = 'world') => {
         .eq('category', category)
         .order('published_at', { ascending: false })
         .limit(30);
-      return data ?? [];
+      return (data as NewsItem[]) ?? [];
     },
     staleTime: 10 * 60 * 1000,
   });
 };
 
 export const useMemes = () => {
-  return useQuery({
+  return useQuery<Meme[]>({
     queryKey: ['memes'],
     queryFn: async () => {
       await supabase.functions.invoke('fetch-memes', { body: {} });
@@ -29,7 +47,7 @@ export const useMemes = () => {
         .select('*')
         .order('fetched_at', { ascending: false })
         .limit(30);
-      return data ?? [];
+      return (data as Meme[]) ?? [];
     },
     staleTime: 15 * 60 * 1000,
   });
