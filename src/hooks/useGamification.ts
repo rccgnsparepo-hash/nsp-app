@@ -54,9 +54,9 @@ export const useDailyLogin = (userId?: string) => {
 };
 
 export const BADGE_INFO: Record<string, { label: string; emoji: string; color: string }> = {
-  streak_master: { label: 'Streak Master', emoji: '🔥', color: 'bg-orange-500' },
-  streak_legend: { label: 'Streak Legend', emoji: '👑', color: 'bg-yellow-500' },
-  top_contributor: { label: 'Top Contributor', emoji: '⭐', color: 'bg-blue-500' },
-  prayer_warrior: { label: 'Prayer Warrior', emoji: '🙏', color: 'bg-purple-500' },
-  first_post: { label: 'First Post', emoji: '✍️', color: 'bg-green-500' },
+  streak_master: { label: 'Streak Master', emoji: '🔥', color: 'bg-destructive' },
+  streak_legend: { label: 'Streak Legend', emoji: '👑', color: 'bg-primary' },
+  top_contributor: { label: 'Top Contributor', emoji: '⭐', color: 'bg-primary' },
+  prayer_warrior: { label: 'Prayer Warrior', emoji: '🙏', color: 'bg-accent text-accent-foreground' },
+  first_post: { label: 'First Post', emoji: '✍️', color: 'bg-primary' },
 };
