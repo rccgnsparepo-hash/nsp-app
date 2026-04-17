@@ -29,6 +29,9 @@ const ProfilePage = () => {
   const [dob, setDob] = useState(profile?.date_of_birth || '');
   const [bio, setBio] = useState(profile?.bio || '');
   const [saving, setSaving] = useState(false);
+  useDailyLogin(user?.id);
+  const { data: stats } = useUserStats(user?.id);
+  const { data: badges } = useUserBadges(user?.id);
 
   useEffect(() => {
     if (profile) {
