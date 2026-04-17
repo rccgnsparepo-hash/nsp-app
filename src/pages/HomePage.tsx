@@ -1,12 +1,15 @@
-import { useState, useCallback, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { usePosts } from '@/hooks/usePosts';
 import { useBirthdays } from '@/hooks/useBirthdays';
 import { useResources } from '@/hooks/useResources';
+import { useTrendingPosts, useTrendingPrayer, useMemeOfTheDay } from '@/hooks/useTrending';
+import { useNews } from '@/hooks/useNews';
 import { useAuth } from '@/contexts/AuthContext';
 import PostCard from '@/components/PostCard';
-import { Cake, FileDown, Link2, ExternalLink } from 'lucide-react';
+import { Cake, FileDown, Link2, ExternalLink, Flame, Sparkles, HandHeart, Newspaper } from 'lucide-react';
 import AppLayout from '@/components/AppLayout';
+import { useNavigate } from 'react-router-dom';
 
 const HomePage = () => {
   const [page, setPage] = useState(0);
@@ -14,7 +17,12 @@ const HomePage = () => {
   const { data: posts, isLoading: postsLoading } = usePosts(page);
   const { data: birthdays } = useBirthdays();
   const { data: resourcesList } = useResources();
+  const { data: trending } = useTrendingPosts(3);
+  const { data: trendingPrayer } = useTrendingPrayer();
+  const { data: memeOfDay } = useMemeOfTheDay();
+  const { data: news } = useNews('world');
   const { profile } = useAuth();
+  const navigate = useNavigate();
   const loaderRef = useRef<HTMLDivElement>(null);
 
   // Accumulate posts as pages load
