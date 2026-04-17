@@ -9,8 +9,9 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/components/AppLayout';
-import { Camera, LogOut, Save, Palette, Sun, Moon, Sparkles, Minus } from 'lucide-react';
+import { Camera, LogOut, Palette, Sun, Moon, Sparkles, Minus, Flame, Trophy, Newspaper, Laugh, Image as ImageIcon } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { useUserStats, useUserBadges, useDailyLogin, BADGE_INFO } from '@/hooks/useGamification';
 
 const themes = [
   { id: 'light' as const, label: 'Light', icon: Sun },
