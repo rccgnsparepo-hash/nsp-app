@@ -35,6 +35,69 @@ export type Database = {
         }
         Relationships: []
       }
+      memes_cache: {
+        Row: {
+          external_id: string
+          fetched_at: string
+          id: string
+          image_url: string
+          source: string | null
+          title: string | null
+        }
+        Insert: {
+          external_id: string
+          fetched_at?: string
+          id?: string
+          image_url: string
+          source?: string | null
+          title?: string | null
+        }
+        Update: {
+          external_id?: string
+          fetched_at?: string
+          id?: string
+          image_url?: string
+          source?: string | null
+          title?: string | null
+        }
+        Relationships: []
+      }
+      news_cache: {
+        Row: {
+          category: string
+          description: string | null
+          fetched_at: string
+          id: string
+          image_url: string | null
+          published_at: string | null
+          source: string | null
+          title: string
+          url: string
+        }
+        Insert: {
+          category: string
+          description?: string | null
+          fetched_at?: string
+          id?: string
+          image_url?: string | null
+          published_at?: string | null
+          source?: string | null
+          title: string
+          url: string
+        }
+        Update: {
+          category?: string
+          description?: string | null
+          fetched_at?: string
+          id?: string
+          image_url?: string | null
+          published_at?: string | null
+          source?: string | null
+          title?: string
+          url?: string
+        }
+        Relationships: []
+      }
       post_comments: {
         Row: {
           content: string
@@ -246,6 +309,27 @@ export type Database = {
         }
         Relationships: []
       }
+      user_badges: {
+        Row: {
+          awarded_at: string
+          badge_type: string
+          id: string
+          user_id: string
+        }
+        Insert: {
+          awarded_at?: string
+          badge_type: string
+          id?: string
+          user_id: string
+        }
+        Update: {
+          awarded_at?: string
+          badge_type?: string
+          id?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       user_roles: {
         Row: {
           id: string
@@ -264,6 +348,39 @@ export type Database = {
         }
         Relationships: []
       }
+      user_stats: {
+        Row: {
+          last_login_date: string | null
+          login_streak: number
+          points: number
+          total_amens_received: number
+          total_posts: number
+          total_prayers: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          last_login_date?: string | null
+          login_streak?: number
+          points?: number
+          total_amens_received?: number
+          total_posts?: number
+          total_prayers?: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          last_login_date?: string | null
+          login_streak?: number
+          points?: number
+          total_amens_received?: number
+          total_posts?: number
+          total_prayers?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
@@ -275,6 +392,14 @@ export type Database = {
           _user_id: string
         }
         Returns: boolean
+      }
+      record_daily_login: {
+        Args: { _user_id: string }
+        Returns: {
+          awarded_badge: string
+          points: number
+          streak: number
+        }[]
       }
     }
     Enums: {
