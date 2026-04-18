@@ -257,6 +257,7 @@ export type Database = {
           email: string | null
           full_name: string
           id: string
+          phone_number: string | null
           profile_image_url: string | null
           theme_preference: string | null
         }
@@ -267,6 +268,7 @@ export type Database = {
           email?: string | null
           full_name: string
           id: string
+          phone_number?: string | null
           profile_image_url?: string | null
           theme_preference?: string | null
         }
@@ -277,6 +279,7 @@ export type Database = {
           email?: string | null
           full_name?: string
           id?: string
+          phone_number?: string | null
           profile_image_url?: string | null
           theme_preference?: string | null
         }
