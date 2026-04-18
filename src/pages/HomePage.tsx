@@ -4,15 +4,12 @@ import { usePosts } from '@/hooks/usePosts';
 import { useBirthdays } from '@/hooks/useBirthdays';
 import { useResources } from '@/hooks/useResources';
 import { useAuth } from '@/contexts/AuthContext';
-import { Cake, Play, FileDown, Link2, ExternalLink } from 'lucide-react';
+import { Cake, FileDown, Link2, ExternalLink } from 'lucide-react';
 import AppLayout from '@/components/AppLayout';
+import YoutubeEmbed from '@/components/YoutubeEmbed';
+import NotificationBell from '@/components/NotificationBell';
 
 const PostCard = ({ post }: { post: any }) => {
-  const getYoutubeId = (url: string) => {
-    const match = url?.match(/(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=))([^&?#]+)/);
-    return match?.[1];
-  };
-
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
@@ -23,14 +20,7 @@ const PostCard = ({ post }: { post: any }) => {
         <img src={post.image_url} alt={post.caption || ''} className="w-full aspect-video object-cover" loading="lazy" />
       )}
       {post.type === 'youtube' && post.video_url && (
-        <div className="aspect-video">
-          <iframe
-            src={`https://www.youtube.com/embed/${getYoutubeId(post.video_url)}`}
-            className="w-full h-full"
-            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-            allowFullScreen
-          />
-        </div>
+        <YoutubeEmbed url={post.video_url} title={post.caption || 'NSP video'} />
       )}
       {post.type === 'video' && post.video_url && (
         <video src={post.video_url} controls className="w-full aspect-video object-cover" />
@@ -62,10 +52,13 @@ const HomePage = () => {
       <div className="sticky top-0 z-40 glass px-4 py-3 border-b border-border">
         <div className="flex items-center justify-between">
           <h1 className="text-xl font-bold font-display text-foreground">NSP App</h1>
-          <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center">
-            <span className="text-primary-foreground text-sm font-bold">
-              {profile?.full_name?.[0]?.toUpperCase() || 'N'}
-            </span>
+          <div className="flex items-center gap-2">
+            <NotificationBell />
+            <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center">
+              <span className="text-primary-foreground text-sm font-bold">
+                {profile?.full_name?.[0]?.toUpperCase() || 'N'}
+              </span>
+            </div>
           </div>
         </div>
       </div>
