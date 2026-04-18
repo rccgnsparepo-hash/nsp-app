@@ -11,6 +11,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import AppLayout from '@/components/AppLayout';
 import { useBirthdays } from '@/hooks/useBirthdays';
 import { Upload, Trash2, Users, FileText, Image as ImageIcon, Cake, Link2, FileDown } from 'lucide-react';
+import { extractYoutubeId } from '@/lib/youtube';
 
 const AdminPage = () => {
   const { isAdmin } = useAuth();
@@ -58,7 +59,12 @@ const AdminPage = () => {
         const { data: { publicUrl } } = supabase.storage.from('posts').getPublicUrl(path);
         imageUrl = publicUrl;
       } else if (postType === 'youtube') {
-        videoUrl = youtubeUrl;
+        if (!extractYoutubeId(youtubeUrl)) {
+          toast.error('Invalid YouTube link. Use a watch, youtu.be, embed or shorts URL.');
+          setPostLoading(false);
+          return;
+        }
+        videoUrl = youtubeUrl.trim();
       } else if (postType === 'video' && postFile) {
         const path = `${Date.now()}-${postFile.name}`;
         const { error } = await supabase.storage.from('posts').upload(path, postFile);
