@@ -9,9 +9,8 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/components/AppLayout';
-import { Camera, LogOut, Palette, Sun, Moon, Sparkles, Minus, Flame, Trophy, Newspaper, Laugh, Image as ImageIcon } from 'lucide-react';
+import { Camera, LogOut, Save, Palette, Sun, Moon, Sparkles, Minus } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { useUserStats, useUserBadges, useDailyLogin, BADGE_INFO } from '@/hooks/useGamification';
 
 const themes = [
   { id: 'light' as const, label: 'Light', icon: Sun },
@@ -29,9 +28,6 @@ const ProfilePage = () => {
   const [dob, setDob] = useState(profile?.date_of_birth || '');
   const [bio, setBio] = useState(profile?.bio || '');
   const [saving, setSaving] = useState(false);
-  useDailyLogin(user?.id);
-  const { data: stats } = useUserStats(user?.id);
-  const { data: badges } = useUserBadges(user?.id);
 
   useEffect(() => {
     if (profile) {
@@ -110,64 +106,6 @@ const ProfilePage = () => {
           <p className="text-sm text-muted-foreground">{profile?.email}</p>
           {profile?.bio && <p className="text-sm text-foreground mt-1 text-center max-w-[250px]">{profile.bio}</p>}
         </motion.div>
-
-        {/* Stats */}
-        <div className="grid grid-cols-2 gap-3">
-          <div className="neumorphic-sm rounded-2xl p-4 bg-card flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full bg-destructive/10 flex items-center justify-center">
-              <Flame className="w-5 h-5 text-destructive" />
-            </div>
-            <div>
-              <p className="text-lg font-bold text-foreground">{stats?.login_streak ?? 0}</p>
-              <p className="text-[10px] text-muted-foreground">Day Streak</p>
-            </div>
-          </div>
-          <div className="neumorphic-sm rounded-2xl p-4 bg-card flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
-              <Trophy className="w-5 h-5 text-primary" />
-            </div>
-            <div>
-              <p className="text-lg font-bold text-foreground">{stats?.points ?? 0}</p>
-              <p className="text-[10px] text-muted-foreground">Points</p>
-            </div>
-          </div>
-        </div>
-
-        {/* Badges */}
-        {badges && badges.length > 0 && (
-          <div className="neumorphic rounded-2xl p-4 bg-card">
-            <h3 className="font-semibold text-foreground text-sm mb-3 flex items-center gap-2">
-              <Trophy className="w-4 h-4 text-primary" /> Badges
-            </h3>
-            <div className="flex flex-wrap gap-2">
-              {badges.map(b => {
-                const info = BADGE_INFO[b.badge_type] || { label: b.badge_type, emoji: '🏅', color: 'bg-muted' };
-                return (
-                  <div key={b.id} className={`px-3 py-1.5 rounded-full ${info.color} text-white text-xs font-semibold flex items-center gap-1`}>
-                    <span>{info.emoji}</span>
-                    <span>{info.label}</span>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        )}
-
-        {/* Quick links */}
-        <div className="grid grid-cols-3 gap-2">
-          <button onClick={() => navigate('/news')} className="neumorphic-sm rounded-2xl p-3 bg-card flex flex-col items-center gap-1">
-            <Newspaper className="w-5 h-5 text-primary" />
-            <span className="text-[10px] font-medium text-foreground">News</span>
-          </button>
-          <button onClick={() => navigate('/memes')} className="neumorphic-sm rounded-2xl p-3 bg-card flex flex-col items-center gap-1">
-            <Laugh className="w-5 h-5 text-primary" />
-            <span className="text-[10px] font-medium text-foreground">Memes</span>
-          </button>
-          <button onClick={() => navigate('/gallery')} className="neumorphic-sm rounded-2xl p-3 bg-card flex flex-col items-center gap-1">
-            <ImageIcon className="w-5 h-5 text-primary" />
-            <span className="text-[10px] font-medium text-foreground">Gallery</span>
-          </button>
-        </div>
 
         {/* Theme Picker */}
         <div className="neumorphic rounded-2xl p-4 bg-card">

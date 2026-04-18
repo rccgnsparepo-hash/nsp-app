@@ -62,17 +62,6 @@ const CreatePostPage = () => {
         user_id: user.id,
       });
       if (error) throw error;
-
-      // Fire-and-forget push to all users
-      supabase.functions.invoke('send-push', {
-        body: {
-          segment: 'Active Users',
-          title: 'New post in NSP',
-          message: content.trim().slice(0, 100) || 'Tap to view',
-          url: `${window.location.origin}/`,
-        },
-      }).catch(() => {});
-
       toast.success('Post created!');
       navigate('/');
     } catch (e: any) {
