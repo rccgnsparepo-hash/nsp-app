@@ -9,8 +9,10 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import AppLayout from '@/components/AppLayout';
+import AppHeader from '@/components/AppHeader';
+import VoiceRecorder from '@/components/VoiceRecorder';
 import { useBirthdays } from '@/hooks/useBirthdays';
-import { Upload, Trash2, Users, FileText, Image as ImageIcon, Cake, Link2, FileDown } from 'lucide-react';
+import { Upload, Trash2, Users, FileText, Image as ImageIcon, Cake, Link2, FileDown, Mic } from 'lucide-react';
 import { extractYoutubeId } from '@/lib/youtube';
 
 const AdminPage = () => {
@@ -39,55 +41,90 @@ const AdminPage = () => {
     enabled: isAdmin,
   });
 
-  // Create Post
+  // Create Post (supports bulk image/video uploads — 1 row per file)
   const [postCaption, setPostCaption] = useState('');
   const [postType, setPostType] = useState<'image' | 'youtube' | 'video'>('image');
-  const [postFile, setPostFile] = useState<File | null>(null);
+  const [postFiles, setPostFiles] = useState<FileList | null>(null);
   const [youtubeUrl, setYoutubeUrl] = useState('');
   const [postLoading, setPostLoading] = useState(false);
 
   const handleCreatePost = async () => {
     setPostLoading(true);
     try {
-      let imageUrl = null;
-      let videoUrl = null;
-
-      if (postType === 'image' && postFile) {
-        const path = `${Date.now()}-${postFile.name}`;
-        const { error } = await supabase.storage.from('posts').upload(path, postFile);
-        if (error) throw error;
-        const { data: { publicUrl } } = supabase.storage.from('posts').getPublicUrl(path);
-        imageUrl = publicUrl;
-      } else if (postType === 'youtube') {
+      if (postType === 'youtube') {
         if (!extractYoutubeId(youtubeUrl)) {
           toast.error('Invalid YouTube link. Use a watch, youtu.be, embed or shorts URL.');
-          setPostLoading(false);
           return;
         }
-        videoUrl = youtubeUrl.trim();
-      } else if (postType === 'video' && postFile) {
-        const path = `${Date.now()}-${postFile.name}`;
-        const { error } = await supabase.storage.from('posts').upload(path, postFile);
+        const { error } = await supabase.from('posts').insert({
+          caption: postCaption || null,
+          video_url: youtubeUrl.trim(),
+          type: 'youtube',
+        });
         if (error) throw error;
-        const { data: { publicUrl } } = supabase.storage.from('posts').getPublicUrl(path);
-        videoUrl = publicUrl;
+      } else {
+        if (!postFiles || postFiles.length === 0) {
+          toast.error('Please choose at least one file');
+          return;
+        }
+        const bucket = 'posts';
+        let uploaded = 0;
+        for (let i = 0; i < postFiles.length; i++) {
+          const file = postFiles[i];
+          const path = `${Date.now()}-${i}-${file.name}`;
+          const { error: upErr } = await supabase.storage.from(bucket).upload(path, file);
+          if (upErr) throw upErr;
+          const { data: { publicUrl } } = supabase.storage.from(bucket).getPublicUrl(path);
+          const { error } = await supabase.from('posts').insert({
+            caption: postCaption || null,
+            image_url: postType === 'image' ? publicUrl : null,
+            video_url: postType === 'video' ? publicUrl : null,
+            type: postType,
+          });
+          if (error) throw error;
+          uploaded++;
+        }
+        toast.success(`${uploaded} ${postType}${uploaded > 1 ? 's' : ''} posted`);
       }
-
-      const { error } = await supabase.from('posts').insert({
-        caption: postCaption,
-        image_url: imageUrl,
-        video_url: videoUrl,
-        type: postType,
-      });
-      if (error) throw error;
       setPostCaption('');
-      setPostFile(null);
+      setPostFiles(null);
       setYoutubeUrl('');
-      toast.success('Post created!');
+      if (postType === 'youtube') toast.success('Post created!');
     } catch (e: any) {
       toast.error(e.message);
     } finally {
       setPostLoading(false);
+    }
+  };
+
+  // Voice Note upload (record or upload audio file)
+  const [vnCaption, setVnCaption] = useState('');
+  const [vnFile, setVnFile] = useState<File | null>(null);
+  const [vnLoading, setVnLoading] = useState(false);
+
+  const handleCreateVoiceNote = async () => {
+    if (!vnFile) { toast.error('Please record or choose an audio file'); return; }
+    setVnLoading(true);
+    try {
+      const path = `${Date.now()}-${vnFile.name}`;
+      const { error: upErr } = await supabase.storage.from('voicenotes').upload(path, vnFile, {
+        contentType: vnFile.type || 'audio/webm',
+      });
+      if (upErr) throw upErr;
+      const { data: { publicUrl } } = supabase.storage.from('voicenotes').getPublicUrl(path);
+      const { error } = await supabase.from('posts').insert({
+        caption: vnCaption || null,
+        video_url: publicUrl,
+        type: 'voice',
+      });
+      if (error) throw error;
+      setVnCaption('');
+      setVnFile(null);
+      toast.success('Voice note posted!');
+    } catch (e: any) {
+      toast.error(e.message);
+    } finally {
+      setVnLoading(false);
     }
   };
 
@@ -192,15 +229,16 @@ const AdminPage = () => {
 
   return (
     <AppLayout>
-      <div className="sticky top-0 z-40 glass px-4 py-3 border-b border-border">
-        <h1 className="text-xl font-bold font-display text-foreground">Admin Dashboard</h1>
-      </div>
+      <AppHeader title="Admin Dashboard" />
 
       <div className="p-4">
         <Tabs defaultValue="posts" className="w-full">
-          <TabsList className="w-full bg-muted rounded-xl grid grid-cols-5 h-10">
+          <TabsList className="w-full bg-muted rounded-xl grid grid-cols-6 h-10">
             <TabsTrigger value="posts" className="rounded-lg text-[10px] data-[state=active]:bg-card data-[state=active]:shadow-sm">
               <FileText className="w-3.5 h-3.5 mr-0.5" />Posts
+            </TabsTrigger>
+            <TabsTrigger value="vn" className="rounded-lg text-[10px] data-[state=active]:bg-card data-[state=active]:shadow-sm">
+              <Mic className="w-3.5 h-3.5 mr-0.5" />Vn
             </TabsTrigger>
             <TabsTrigger value="gallery" className="rounded-lg text-[10px] data-[state=active]:bg-card data-[state=active]:shadow-sm">
               <ImageIcon className="w-3.5 h-3.5 mr-0.5" />Gallery
@@ -212,11 +250,11 @@ const AdminPage = () => {
               <Users className="w-3.5 h-3.5 mr-0.5" />Users
             </TabsTrigger>
             <TabsTrigger value="birthdays" className="rounded-lg text-[10px] data-[state=active]:bg-card data-[state=active]:shadow-sm">
-              <Cake className="w-3.5 h-3.5 mr-0.5" />B-days
+              <Cake className="w-3.5 h-3.5 mr-0.5" />B-day
             </TabsTrigger>
           </TabsList>
 
-          {/* Create Post */}
+          {/* Create Post — supports BULK image/video uploads */}
           <TabsContent value="posts" className="mt-4 space-y-4">
             <div className="neumorphic rounded-2xl p-4 bg-card space-y-3">
               <h3 className="font-semibold text-foreground">Create Post</h3>
@@ -224,7 +262,7 @@ const AdminPage = () => {
                 {(['image', 'youtube', 'video'] as const).map(t => (
                   <button
                     key={t}
-                    onClick={() => setPostType(t)}
+                    onClick={() => { setPostType(t); setPostFiles(null); }}
                     className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
                       postType === t ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'
                     }`}
@@ -234,7 +272,7 @@ const AdminPage = () => {
                 ))}
               </div>
               <Textarea
-                placeholder="Caption..."
+                placeholder="Caption (shared across all uploads)..."
                 value={postCaption}
                 onChange={(e) => setPostCaption(e.target.value)}
                 className="bg-muted border-0 neumorphic-inset resize-none"
@@ -247,15 +285,54 @@ const AdminPage = () => {
                   className="bg-muted border-0 neumorphic-inset"
                 />
               ) : (
-                <Input
-                  type="file"
-                  accept={postType === 'image' ? 'image/*' : 'video/*'}
-                  onChange={(e) => setPostFile(e.target.files?.[0] || null)}
-                  className="bg-muted border-0"
-                />
+                <>
+                  <Input
+                    type="file"
+                    multiple
+                    accept={postType === 'image' ? 'image/*' : 'video/*'}
+                    onChange={(e) => setPostFiles(e.target.files)}
+                    className="bg-muted border-0"
+                  />
+                  {postFiles && postFiles.length > 0 && (
+                    <p className="text-xs text-muted-foreground">
+                      {postFiles.length} file{postFiles.length > 1 ? 's' : ''} selected — each will be posted as its own item.
+                    </p>
+                  )}
+                </>
               )}
               <Button onClick={handleCreatePost} disabled={postLoading} className="w-full bg-primary text-primary-foreground rounded-xl">
-                <Upload className="w-4 h-4 mr-2" />{postLoading ? 'Creating...' : 'Create Post'}
+                <Upload className="w-4 h-4 mr-2" />{postLoading ? 'Uploading...' : 'Create Post'}
+              </Button>
+            </div>
+          </TabsContent>
+
+          {/* Voice Notes */}
+          <TabsContent value="vn" className="mt-4 space-y-4">
+            <div className="neumorphic rounded-2xl p-4 bg-card space-y-3">
+              <h3 className="font-semibold text-foreground flex items-center gap-2">
+                <Mic className="w-4 h-4 text-primary" />Post a Voice Note
+              </h3>
+              <p className="text-xs text-muted-foreground">Record from your microphone or upload an audio file.</p>
+              <VoiceRecorder
+                onRecorded={setVnFile}
+                recordedFile={vnFile}
+                onClear={() => setVnFile(null)}
+              />
+              <div className="text-xs text-muted-foreground text-center">— or —</div>
+              <Input
+                type="file"
+                accept="audio/*"
+                onChange={(e) => setVnFile(e.target.files?.[0] || null)}
+                className="bg-muted border-0"
+              />
+              <Textarea
+                placeholder="Caption (optional)..."
+                value={vnCaption}
+                onChange={(e) => setVnCaption(e.target.value)}
+                className="bg-muted border-0 neumorphic-inset resize-none"
+              />
+              <Button onClick={handleCreateVoiceNote} disabled={vnLoading || !vnFile} className="w-full bg-primary text-primary-foreground rounded-xl">
+                <Upload className="w-4 h-4 mr-2" />{vnLoading ? 'Posting...' : 'Post Voice Note'}
               </Button>
             </div>
           </TabsContent>

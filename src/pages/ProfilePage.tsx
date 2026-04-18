@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/components/AppLayout';
+import AppHeader from '@/components/AppHeader';
 import { Camera, LogOut, Save } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
@@ -60,9 +61,7 @@ const ProfilePage = () => {
 
   return (
     <AppLayout>
-      <div className="sticky top-0 z-40 glass px-4 py-3 border-b border-border">
-        <h1 className="text-xl font-bold font-display text-foreground">Profile</h1>
-      </div>
+      <AppHeader title="Profile" />
 
       <div className="p-4 space-y-6">
         {/* Avatar */}

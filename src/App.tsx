@@ -4,6 +4,8 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
+import { NotificationsProvider } from "@/hooks/useRealtimeNotifications";
+import NotificationOverlay from "@/components/NotificationOverlay";
 import Auth from "./pages/Auth";
 import HomePage from "./pages/HomePage";
 import PrayerPage from "./pages/PrayerPage";
@@ -18,7 +20,12 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   const { user, loading } = useAuth();
   if (loading) return <div className="min-h-screen bg-background flex items-center justify-center"><div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" /></div>;
   if (!user) return <Navigate to="/auth" replace />;
-  return <>{children}</>;
+  return (
+    <NotificationsProvider>
+      <NotificationOverlay />
+      {children}
+    </NotificationsProvider>
+  );
 };
 
 const AuthRoute = ({ children }: { children: React.ReactNode }) => {
