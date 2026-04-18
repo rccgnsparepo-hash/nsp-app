@@ -13,6 +13,7 @@ const Auth = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [fullName, setFullName] = useState('');
+  const [phoneNumber, setPhoneNumber] = useState('');
   const [dateOfBirth, setDateOfBirth] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [profileImage, setProfileImage] = useState<File | null>(null);
@@ -73,6 +74,8 @@ const Auth = () => {
         navigate('/');
       } else {
         if (!fullName.trim()) { toast.error('Full name is required'); setLoading(false); return; }
+        if (!phoneNumber.trim()) { toast.error('Phone number is required'); setLoading(false); return; }
+        if (!/^[+\d][\d\s\-()]{6,}$/.test(phoneNumber.trim())) { toast.error('Please enter a valid phone number'); setLoading(false); return; }
         if (!dateOfBirth) { toast.error('Date of birth is required'); setLoading(false); return; }
         if (isAdminMode && !adminKey) { toast.error('Admin secret key is required'); setLoading(false); return; }
 
@@ -92,6 +95,7 @@ const Auth = () => {
           await supabase.from('profiles').update({
             full_name: fullName,
             date_of_birth: dateOfBirth,
+            phone_number: phoneNumber.trim(),
             ...(imageUrl && { profile_image_url: imageUrl }),
           }).eq('id', data.user.id);
 
@@ -176,6 +180,18 @@ const Auth = () => {
                       value={fullName}
                       onChange={(e) => setFullName(e.target.value)}
                       placeholder="John Doe"
+                      className="mt-1 bg-muted border-0 neumorphic-inset"
+                    />
+                  </div>
+
+                  <div>
+                    <Label htmlFor="phone" className="text-foreground">Phone Number</Label>
+                    <Input
+                      id="phone"
+                      type="tel"
+                      value={phoneNumber}
+                      onChange={(e) => setPhoneNumber(e.target.value)}
+                      placeholder="+1 555 123 4567"
                       className="mt-1 bg-muted border-0 neumorphic-inset"
                     />
                   </div>
