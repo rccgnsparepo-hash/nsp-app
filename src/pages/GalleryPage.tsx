@@ -2,30 +2,21 @@ import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useGallery } from '@/hooks/useGallery';
 import AppLayout from '@/components/AppLayout';
-import { X, ChevronLeft, ChevronRight, Download } from 'lucide-react';
+import { X, ChevronLeft, ChevronRight } from 'lucide-react';
 
 const GalleryPage = () => {
   const { data: images, isLoading } = useGallery();
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
 
   const goNext = () => {
-    if (selectedIndex !== null && images) setSelectedIndex((selectedIndex + 1) % images.length);
-  };
-  const goPrev = () => {
-    if (selectedIndex !== null && images) setSelectedIndex((selectedIndex - 1 + images.length) % images.length);
+    if (selectedIndex !== null && images) {
+      setSelectedIndex((selectedIndex + 1) % images.length);
+    }
   };
 
-  const handleDownload = async (url: string, caption?: string | null) => {
-    try {
-      const res = await fetch(url);
-      const blob = await res.blob();
-      const a = document.createElement('a');
-      a.href = URL.createObjectURL(blob);
-      a.download = caption || 'nsp-gallery-image';
-      a.click();
-      URL.revokeObjectURL(a.href);
-    } catch {
-      window.open(url, '_blank');
+  const goPrev = () => {
+    if (selectedIndex !== null && images) {
+      setSelectedIndex((selectedIndex - 1 + images.length) % images.length);
     }
   };
 
@@ -38,7 +29,9 @@ const GalleryPage = () => {
       <div className="p-4">
         {isLoading ? (
           <div className="grid grid-cols-2 gap-3">
-            {[1, 2, 3, 4].map(i => <div key={i} className="aspect-square rounded-2xl bg-muted animate-pulse" />)}
+            {[1, 2, 3, 4].map(i => (
+              <div key={i} className="aspect-square rounded-2xl bg-muted animate-pulse" />
+            ))}
           </div>
         ) : images && images.length > 0 ? (
           <div className="grid grid-cols-2 gap-3">
@@ -51,7 +44,12 @@ const GalleryPage = () => {
                 onClick={() => setSelectedIndex(idx)}
                 className="relative aspect-square rounded-2xl overflow-hidden neumorphic-sm"
               >
-                <img src={img.image_url} alt={img.caption || ''} className="w-full h-full object-cover" loading="lazy" />
+                <img
+                  src={img.image_url}
+                  alt={img.caption || ''}
+                  className="w-full h-full object-cover"
+                  loading="lazy"
+                />
                 {img.caption && (
                   <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-foreground/60 to-transparent p-2">
                     <p className="text-[11px] text-card truncate">{img.caption}</p>
@@ -77,27 +75,25 @@ const GalleryPage = () => {
             className="fixed inset-0 z-[100] bg-foreground/95 flex items-center justify-center"
             onClick={() => setSelectedIndex(null)}
           >
-            <div className="absolute top-4 right-4 flex gap-2">
-              <button
-                onClick={(e) => { e.stopPropagation(); handleDownload(images[selectedIndex].image_url, images[selectedIndex].caption); }}
-                className="w-10 h-10 rounded-full bg-card/20 flex items-center justify-center"
-              >
-                <Download className="w-5 h-5 text-card" />
-              </button>
-              <button
-                onClick={(e) => { e.stopPropagation(); setSelectedIndex(null); }}
-                className="w-10 h-10 rounded-full bg-card/20 flex items-center justify-center"
-              >
-                <X className="w-5 h-5 text-card" />
-              </button>
-            </div>
+            <button
+              onClick={(e) => { e.stopPropagation(); setSelectedIndex(null); }}
+              className="absolute top-4 right-4 w-10 h-10 rounded-full bg-card/20 flex items-center justify-center"
+            >
+              <X className="w-5 h-5 text-card" />
+            </button>
 
             {images.length > 1 && (
               <>
-                <button onClick={(e) => { e.stopPropagation(); goPrev(); }} className="absolute left-2 w-10 h-10 rounded-full bg-card/20 flex items-center justify-center">
+                <button
+                  onClick={(e) => { e.stopPropagation(); goPrev(); }}
+                  className="absolute left-2 w-10 h-10 rounded-full bg-card/20 flex items-center justify-center"
+                >
                   <ChevronLeft className="w-5 h-5 text-card" />
                 </button>
-                <button onClick={(e) => { e.stopPropagation(); goNext(); }} className="absolute right-2 w-10 h-10 rounded-full bg-card/20 flex items-center justify-center">
+                <button
+                  onClick={(e) => { e.stopPropagation(); goNext(); }}
+                  className="absolute right-2 w-10 h-10 rounded-full bg-card/20 flex items-center justify-center"
+                >
                   <ChevronRight className="w-5 h-5 text-card" />
                 </button>
               </>
