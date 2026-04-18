@@ -229,15 +229,16 @@ const AdminPage = () => {
 
   return (
     <AppLayout>
-      <div className="sticky top-0 z-40 glass px-4 py-3 border-b border-border">
-        <h1 className="text-xl font-bold font-display text-foreground">Admin Dashboard</h1>
-      </div>
+      <AppHeader title="Admin Dashboard" />
 
       <div className="p-4">
         <Tabs defaultValue="posts" className="w-full">
-          <TabsList className="w-full bg-muted rounded-xl grid grid-cols-5 h-10">
+          <TabsList className="w-full bg-muted rounded-xl grid grid-cols-6 h-10">
             <TabsTrigger value="posts" className="rounded-lg text-[10px] data-[state=active]:bg-card data-[state=active]:shadow-sm">
               <FileText className="w-3.5 h-3.5 mr-0.5" />Posts
+            </TabsTrigger>
+            <TabsTrigger value="vn" className="rounded-lg text-[10px] data-[state=active]:bg-card data-[state=active]:shadow-sm">
+              <Mic className="w-3.5 h-3.5 mr-0.5" />Vn
             </TabsTrigger>
             <TabsTrigger value="gallery" className="rounded-lg text-[10px] data-[state=active]:bg-card data-[state=active]:shadow-sm">
               <ImageIcon className="w-3.5 h-3.5 mr-0.5" />Gallery
@@ -249,11 +250,11 @@ const AdminPage = () => {
               <Users className="w-3.5 h-3.5 mr-0.5" />Users
             </TabsTrigger>
             <TabsTrigger value="birthdays" className="rounded-lg text-[10px] data-[state=active]:bg-card data-[state=active]:shadow-sm">
-              <Cake className="w-3.5 h-3.5 mr-0.5" />B-days
+              <Cake className="w-3.5 h-3.5 mr-0.5" />B-day
             </TabsTrigger>
           </TabsList>
 
-          {/* Create Post */}
+          {/* Create Post — supports BULK image/video uploads */}
           <TabsContent value="posts" className="mt-4 space-y-4">
             <div className="neumorphic rounded-2xl p-4 bg-card space-y-3">
               <h3 className="font-semibold text-foreground">Create Post</h3>
@@ -261,7 +262,7 @@ const AdminPage = () => {
                 {(['image', 'youtube', 'video'] as const).map(t => (
                   <button
                     key={t}
-                    onClick={() => setPostType(t)}
+                    onClick={() => { setPostType(t); setPostFiles(null); }}
                     className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
                       postType === t ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'
                     }`}
@@ -271,7 +272,7 @@ const AdminPage = () => {
                 ))}
               </div>
               <Textarea
-                placeholder="Caption..."
+                placeholder="Caption (shared across all uploads)..."
                 value={postCaption}
                 onChange={(e) => setPostCaption(e.target.value)}
                 className="bg-muted border-0 neumorphic-inset resize-none"
@@ -284,15 +285,54 @@ const AdminPage = () => {
                   className="bg-muted border-0 neumorphic-inset"
                 />
               ) : (
-                <Input
-                  type="file"
-                  accept={postType === 'image' ? 'image/*' : 'video/*'}
-                  onChange={(e) => setPostFile(e.target.files?.[0] || null)}
-                  className="bg-muted border-0"
-                />
+                <>
+                  <Input
+                    type="file"
+                    multiple
+                    accept={postType === 'image' ? 'image/*' : 'video/*'}
+                    onChange={(e) => setPostFiles(e.target.files)}
+                    className="bg-muted border-0"
+                  />
+                  {postFiles && postFiles.length > 0 && (
+                    <p className="text-xs text-muted-foreground">
+                      {postFiles.length} file{postFiles.length > 1 ? 's' : ''} selected — each will be posted as its own item.
+                    </p>
+                  )}
+                </>
               )}
               <Button onClick={handleCreatePost} disabled={postLoading} className="w-full bg-primary text-primary-foreground rounded-xl">
-                <Upload className="w-4 h-4 mr-2" />{postLoading ? 'Creating...' : 'Create Post'}
+                <Upload className="w-4 h-4 mr-2" />{postLoading ? 'Uploading...' : 'Create Post'}
+              </Button>
+            </div>
+          </TabsContent>
+
+          {/* Voice Notes */}
+          <TabsContent value="vn" className="mt-4 space-y-4">
+            <div className="neumorphic rounded-2xl p-4 bg-card space-y-3">
+              <h3 className="font-semibold text-foreground flex items-center gap-2">
+                <Mic className="w-4 h-4 text-primary" />Post a Voice Note
+              </h3>
+              <p className="text-xs text-muted-foreground">Record from your microphone or upload an audio file.</p>
+              <VoiceRecorder
+                onRecorded={setVnFile}
+                recordedFile={vnFile}
+                onClear={() => setVnFile(null)}
+              />
+              <div className="text-xs text-muted-foreground text-center">— or —</div>
+              <Input
+                type="file"
+                accept="audio/*"
+                onChange={(e) => setVnFile(e.target.files?.[0] || null)}
+                className="bg-muted border-0"
+              />
+              <Textarea
+                placeholder="Caption (optional)..."
+                value={vnCaption}
+                onChange={(e) => setVnCaption(e.target.value)}
+                className="bg-muted border-0 neumorphic-inset resize-none"
+              />
+              <Button onClick={handleCreateVoiceNote} disabled={vnLoading || !vnFile} className="w-full bg-primary text-primary-foreground rounded-xl">
+                <Upload className="w-4 h-4 mr-2" />{vnLoading ? 'Posting...' : 'Post Voice Note'}
               </Button>
             </div>
           </TabsContent>
