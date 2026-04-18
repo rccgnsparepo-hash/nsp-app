@@ -8,6 +8,7 @@ import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import AppLayout from '@/components/AppLayout';
+import AppHeader from '@/components/AppHeader';
 import { HandHeart, Plus, X, Send } from 'lucide-react';
 
 const PrayerPage = () => {
@@ -56,17 +57,18 @@ const PrayerPage = () => {
 
   return (
     <AppLayout>
-      <div className="sticky top-0 z-40 glass px-4 py-3 border-b border-border">
-        <div className="flex items-center justify-between">
-          <h1 className="text-xl font-bold font-display text-foreground">Prayer Requests</h1>
+      <AppHeader
+        title="Prayer Requests"
+        right={
           <button
             onClick={() => setShowForm(!showForm)}
-            className="w-8 h-8 rounded-full bg-primary flex items-center justify-center"
+            className="w-9 h-9 rounded-full bg-primary flex items-center justify-center neumorphic-sm"
+            aria-label={showForm ? 'Close form' : 'New prayer request'}
           >
             {showForm ? <X className="w-4 h-4 text-primary-foreground" /> : <Plus className="w-4 h-4 text-primary-foreground" />}
           </button>
-        </div>
-      </div>
+        }
+      />
 
       <div className="p-4 space-y-4">
         <AnimatePresence>

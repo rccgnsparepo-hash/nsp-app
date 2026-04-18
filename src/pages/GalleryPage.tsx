@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useGallery } from '@/hooks/useGallery';
 import AppLayout from '@/components/AppLayout';
+import AppHeader from '@/components/AppHeader';
 import { X, ChevronLeft, ChevronRight, Download } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -43,9 +44,7 @@ const GalleryPage = () => {
 
   return (
     <AppLayout>
-      <div className="sticky top-0 z-40 glass px-4 py-3 border-b border-border">
-        <h1 className="text-xl font-bold font-display text-foreground">Gallery</h1>
-      </div>
+      <AppHeader title="Gallery" />
 
       <div className="p-4">
         {isLoading ? (

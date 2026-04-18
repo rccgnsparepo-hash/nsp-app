@@ -3,7 +3,7 @@ import { format } from 'date-fns';
 import { usePosts } from '@/hooks/usePosts';
 import { useBirthdays } from '@/hooks/useBirthdays';
 import { useResources } from '@/hooks/useResources';
-import { useAuth } from '@/contexts/AuthContext';
+
 import { Cake, FileDown, Link2, ExternalLink } from 'lucide-react';
 import AppLayout from '@/components/AppLayout';
 import AppHeader from '@/components/AppHeader';
