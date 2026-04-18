@@ -6,8 +6,9 @@ import { useResources } from '@/hooks/useResources';
 import { useAuth } from '@/contexts/AuthContext';
 import { Cake, FileDown, Link2, ExternalLink } from 'lucide-react';
 import AppLayout from '@/components/AppLayout';
+import AppHeader from '@/components/AppHeader';
 import YoutubeEmbed from '@/components/YoutubeEmbed';
-import NotificationBell from '@/components/NotificationBell';
+import VoicePostPlayer from '@/components/VoicePostPlayer';
 
 const PostCard = ({ post }: { post: any }) => {
   return (
@@ -25,6 +26,9 @@ const PostCard = ({ post }: { post: any }) => {
       {post.type === 'video' && post.video_url && (
         <video src={post.video_url} controls className="w-full aspect-video object-cover" />
       )}
+      {post.type === 'voice' && post.video_url && (
+        <VoicePostPlayer src={post.video_url} />
+      )}
       {post.caption && (
         <div className="p-4">
           <p className="text-foreground text-sm">{post.caption}</p>
@@ -41,27 +45,13 @@ const HomePage = () => {
   const { data: posts, isLoading: postsLoading } = usePosts();
   const { data: birthdays } = useBirthdays();
   const { data: resourcesList } = useResources();
-  const { profile } = useAuth();
 
   const upcomingBirthdays = birthdays?.slice(0, 3) ?? [];
   const todayBirthdays = birthdays?.filter(b => b.daysUntil === 0) ?? [];
 
   return (
     <AppLayout>
-      {/* Header */}
-      <div className="sticky top-0 z-40 glass px-4 py-3 border-b border-border">
-        <div className="flex items-center justify-between">
-          <h1 className="text-xl font-bold font-display text-foreground">NSP App</h1>
-          <div className="flex items-center gap-2">
-            <NotificationBell />
-            <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center">
-              <span className="text-primary-foreground text-sm font-bold">
-                {profile?.full_name?.[0]?.toUpperCase() || 'N'}
-              </span>
-            </div>
-          </div>
-        </div>
-      </div>
+      <AppHeader title="NSP App" />
 
       <div className="p-4 space-y-4">
         {/* Birthday Banner */}
