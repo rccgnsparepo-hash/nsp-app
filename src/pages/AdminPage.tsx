@@ -9,8 +9,10 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import AppLayout from '@/components/AppLayout';
+import AppHeader from '@/components/AppHeader';
+import VoiceRecorder from '@/components/VoiceRecorder';
 import { useBirthdays } from '@/hooks/useBirthdays';
-import { Upload, Trash2, Users, FileText, Image as ImageIcon, Cake, Link2, FileDown } from 'lucide-react';
+import { Upload, Trash2, Users, FileText, Image as ImageIcon, Cake, Link2, FileDown, Mic } from 'lucide-react';
 import { extractYoutubeId } from '@/lib/youtube';
 
 const AdminPage = () => {
@@ -39,55 +41,90 @@ const AdminPage = () => {
     enabled: isAdmin,
   });
 
-  // Create Post
+  // Create Post (supports bulk image/video uploads — 1 row per file)
   const [postCaption, setPostCaption] = useState('');
   const [postType, setPostType] = useState<'image' | 'youtube' | 'video'>('image');
-  const [postFile, setPostFile] = useState<File | null>(null);
+  const [postFiles, setPostFiles] = useState<FileList | null>(null);
   const [youtubeUrl, setYoutubeUrl] = useState('');
   const [postLoading, setPostLoading] = useState(false);
 
   const handleCreatePost = async () => {
     setPostLoading(true);
     try {
-      let imageUrl = null;
-      let videoUrl = null;
-
-      if (postType === 'image' && postFile) {
-        const path = `${Date.now()}-${postFile.name}`;
-        const { error } = await supabase.storage.from('posts').upload(path, postFile);
-        if (error) throw error;
-        const { data: { publicUrl } } = supabase.storage.from('posts').getPublicUrl(path);
-        imageUrl = publicUrl;
-      } else if (postType === 'youtube') {
+      if (postType === 'youtube') {
         if (!extractYoutubeId(youtubeUrl)) {
           toast.error('Invalid YouTube link. Use a watch, youtu.be, embed or shorts URL.');
-          setPostLoading(false);
           return;
         }
-        videoUrl = youtubeUrl.trim();
-      } else if (postType === 'video' && postFile) {
-        const path = `${Date.now()}-${postFile.name}`;
-        const { error } = await supabase.storage.from('posts').upload(path, postFile);
+        const { error } = await supabase.from('posts').insert({
+          caption: postCaption || null,
+          video_url: youtubeUrl.trim(),
+          type: 'youtube',
+        });
         if (error) throw error;
-        const { data: { publicUrl } } = supabase.storage.from('posts').getPublicUrl(path);
-        videoUrl = publicUrl;
+      } else {
+        if (!postFiles || postFiles.length === 0) {
+          toast.error('Please choose at least one file');
+          return;
+        }
+        const bucket = 'posts';
+        let uploaded = 0;
+        for (let i = 0; i < postFiles.length; i++) {
+          const file = postFiles[i];
+          const path = `${Date.now()}-${i}-${file.name}`;
+          const { error: upErr } = await supabase.storage.from(bucket).upload(path, file);
+          if (upErr) throw upErr;
+          const { data: { publicUrl } } = supabase.storage.from(bucket).getPublicUrl(path);
+          const { error } = await supabase.from('posts').insert({
+            caption: postCaption || null,
+            image_url: postType === 'image' ? publicUrl : null,
+            video_url: postType === 'video' ? publicUrl : null,
+            type: postType,
+          });
+          if (error) throw error;
+          uploaded++;
+        }
+        toast.success(`${uploaded} ${postType}${uploaded > 1 ? 's' : ''} posted`);
       }
-
-      const { error } = await supabase.from('posts').insert({
-        caption: postCaption,
-        image_url: imageUrl,
-        video_url: videoUrl,
-        type: postType,
-      });
-      if (error) throw error;
       setPostCaption('');
-      setPostFile(null);
+      setPostFiles(null);
       setYoutubeUrl('');
-      toast.success('Post created!');
+      if (postType === 'youtube') toast.success('Post created!');
     } catch (e: any) {
       toast.error(e.message);
     } finally {
       setPostLoading(false);
+    }
+  };
+
+  // Voice Note upload (record or upload audio file)
+  const [vnCaption, setVnCaption] = useState('');
+  const [vnFile, setVnFile] = useState<File | null>(null);
+  const [vnLoading, setVnLoading] = useState(false);
+
+  const handleCreateVoiceNote = async () => {
+    if (!vnFile) { toast.error('Please record or choose an audio file'); return; }
+    setVnLoading(true);
+    try {
+      const path = `${Date.now()}-${vnFile.name}`;
+      const { error: upErr } = await supabase.storage.from('voicenotes').upload(path, vnFile, {
+        contentType: vnFile.type || 'audio/webm',
+      });
+      if (upErr) throw upErr;
+      const { data: { publicUrl } } = supabase.storage.from('voicenotes').getPublicUrl(path);
+      const { error } = await supabase.from('posts').insert({
+        caption: vnCaption || null,
+        video_url: publicUrl,
+        type: 'voice',
+      });
+      if (error) throw error;
+      setVnCaption('');
+      setVnFile(null);
+      toast.success('Voice note posted!');
+    } catch (e: any) {
+      toast.error(e.message);
+    } finally {
+      setVnLoading(false);
     }
   };
 
