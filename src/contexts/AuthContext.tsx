@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
+import { initOneSignal, linkUserToPush, logoutOneSignal, requestPushPermission } from '@/lib/onesignal';
 
 interface AuthContextType {
   user: User | null;
@@ -51,12 +52,20 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   };
 
   useEffect(() => {
+    initOneSignal().catch(() => {});
+
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (_event, session) => {
         setSession(session);
         setUser(session?.user ?? null);
         if (session?.user) {
           setTimeout(() => fetchProfile(session.user.id), 0);
+          setTimeout(async () => {
+            try {
+              await requestPushPermission();
+              await linkUserToPush(session.user.id, session.user.email);
+            } catch {}
+          }, 800);
         } else {
           setProfile(null);
           setIsAdmin(false);
@@ -68,7 +77,15 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
       setUser(session?.user ?? null);
-      if (session?.user) fetchProfile(session.user.id);
+      if (session?.user) {
+        fetchProfile(session.user.id);
+        setTimeout(async () => {
+          try {
+            await requestPushPermission();
+            await linkUserToPush(session.user.id, session.user.email);
+          } catch {}
+        }, 800);
+      }
       setLoading(false);
     });
 
@@ -76,6 +93,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   }, []);
 
   const signOut = async () => {
+    await logoutOneSignal();
     await supabase.auth.signOut();
     setUser(null);
     setSession(null);
