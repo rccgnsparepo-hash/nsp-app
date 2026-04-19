@@ -1,24 +1,53 @@
+import { useRef, useState } from 'react';
 import { motion } from 'framer-motion';
 import { format } from 'date-fns';
+import { toast } from 'sonner';
 import { usePosts } from '@/hooks/usePosts';
 import { useBirthdays } from '@/hooks/useBirthdays';
 import { useResources } from '@/hooks/useResources';
+import { useAuth } from '@/contexts/AuthContext';
+import { supabase } from '@/integrations/supabase/client';
 
-import { Cake, FileDown, Link2, ExternalLink } from 'lucide-react';
+import { Cake, FileDown, Link2, ExternalLink, Trash2 } from 'lucide-react';
 import AppLayout from '@/components/AppLayout';
 import AppHeader from '@/components/AppHeader';
 import YoutubeEmbed from '@/components/YoutubeEmbed';
 import VoicePostPlayer from '@/components/VoicePostPlayer';
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle
+} from '@/components/ui/alert-dialog';
 
-const PostCard = ({ post }: { post: any }) => {
+const PostCard = ({ post, canDelete, onAskDelete }: { post: any; canDelete: boolean; onAskDelete: (p: any) => void }) => {
+  const pressTimer = useRef<number | null>(null);
+
+  const startPress = () => {
+    if (!canDelete) return;
+    pressTimer.current = window.setTimeout(() => {
+      onAskDelete(post);
+      // Haptic feedback if supported
+      if (navigator.vibrate) navigator.vibrate(40);
+    }, 550);
+  };
+  const cancelPress = () => {
+    if (pressTimer.current) { window.clearTimeout(pressTimer.current); pressTimer.current = null; }
+  };
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
-      className="neumorphic rounded-2xl overflow-hidden bg-card mb-4"
+      onTouchStart={startPress}
+      onTouchEnd={cancelPress}
+      onTouchCancel={cancelPress}
+      onMouseDown={startPress}
+      onMouseUp={cancelPress}
+      onMouseLeave={cancelPress}
+      onContextMenu={(e) => { if (canDelete) { e.preventDefault(); onAskDelete(post); } }}
+      className="neumorphic rounded-2xl overflow-hidden bg-card mb-4 select-none"
     >
       {post.type === 'image' && post.image_url && (
-        <img src={post.image_url} alt={post.caption || ''} className="w-full aspect-video object-cover" loading="lazy" />
+        <img src={post.image_url} alt={post.caption || ''} className="w-full aspect-video object-cover" loading="lazy" draggable={false} />
       )}
       {post.type === 'youtube' && post.video_url && (
         <YoutubeEmbed url={post.video_url} title={post.caption || 'NSP video'} />
@@ -45,9 +74,28 @@ const HomePage = () => {
   const { data: posts, isLoading: postsLoading } = usePosts();
   const { data: birthdays } = useBirthdays();
   const { data: resourcesList } = useResources();
+  const { user, isAdmin } = useAuth();
+
+  const [pendingDelete, setPendingDelete] = useState<any | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   const upcomingBirthdays = birthdays?.slice(0, 3) ?? [];
   const todayBirthdays = birthdays?.filter(b => b.daysUntil === 0) ?? [];
+
+  const confirmDelete = async () => {
+    if (!pendingDelete) return;
+    setDeleting(true);
+    try {
+      const { error } = await supabase.from('posts').delete().eq('id', pendingDelete.id);
+      if (error) throw error;
+      toast.success('Post deleted');
+      setPendingDelete(null);
+    } catch (e: any) {
+      toast.error(e.message);
+    } finally {
+      setDeleting(false);
+    }
+  };
 
   return (
     <AppLayout>
@@ -134,6 +182,12 @@ const HomePage = () => {
           </div>
         )}
 
+        {isAdmin && posts && posts.length > 0 && (
+          <p className="text-[11px] text-muted-foreground text-center -mb-2">
+            Tip: long-press any post to delete it.
+          </p>
+        )}
+
         {/* Posts Feed */}
         {postsLoading ? (
           <div className="space-y-4">
@@ -142,13 +196,47 @@ const HomePage = () => {
             ))}
           </div>
         ) : posts && posts.length > 0 ? (
-          posts.map(post => <PostCard key={post.id} post={post} />)
+          posts.map(post => {
+            const canDelete = isAdmin || (!!user && post.user_id === user.id);
+            return (
+              <PostCard
+                key={post.id}
+                post={post}
+                canDelete={canDelete}
+                onAskDelete={setPendingDelete}
+              />
+            );
+          })
         ) : (
           <div className="text-center py-16">
             <p className="text-muted-foreground">No posts yet</p>
           </div>
         )}
       </div>
+
+      <AlertDialog open={!!pendingDelete} onOpenChange={(o) => !o && setPendingDelete(null)}>
+        <AlertDialogContent className="rounded-2xl">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <Trash2 className="w-5 h-5 text-destructive" />
+              Delete this post?
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              This permanently removes the post for everyone. This cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="rounded-xl">Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmDelete}
+              disabled={deleting}
+              className="bg-destructive text-destructive-foreground rounded-xl"
+            >
+              {deleting ? 'Deleting…' : 'Delete'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </AppLayout>
   );
 };
