@@ -9,24 +9,72 @@ interface Props {
   onClear: () => void;
 }
 
+const BAR_COUNT = 32;
+
 const VoiceRecorder = ({ onRecorded, recordedFile, onClear }: Props) => {
   const [recording, setRecording] = useState(false);
   const [seconds, setSeconds] = useState(0);
   const [playing, setPlaying] = useState(false);
+  const [levels, setLevels] = useState<number[]>(Array(BAR_COUNT).fill(4));
   const mediaRecRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const timerRef = useRef<number | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const audioCtxRef = useRef<AudioContext | null>(null);
+  const analyserRef = useRef<AnalyserNode | null>(null);
+  const rafRef = useRef<number | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
   const previewUrl = recordedFile ? URL.createObjectURL(recordedFile) : null;
 
   useEffect(() => () => {
+    cleanupAudio();
     if (timerRef.current) window.clearInterval(timerRef.current);
     if (previewUrl) URL.revokeObjectURL(previewUrl);
   }, [previewUrl]);
 
+  const cleanupAudio = () => {
+    if (rafRef.current) cancelAnimationFrame(rafRef.current);
+    rafRef.current = null;
+    analyserRef.current = null;
+    if (audioCtxRef.current && audioCtxRef.current.state !== 'closed') {
+      audioCtxRef.current.close().catch(() => {});
+    }
+    audioCtxRef.current = null;
+    streamRef.current?.getTracks().forEach(t => t.stop());
+    streamRef.current = null;
+  };
+
+  const startVisualizer = (stream: MediaStream) => {
+    const Ctx = window.AudioContext || (window as any).webkitAudioContext;
+    const ctx = new Ctx();
+    const source = ctx.createMediaStreamSource(stream);
+    const analyser = ctx.createAnalyser();
+    analyser.fftSize = 64;
+    source.connect(analyser);
+    audioCtxRef.current = ctx;
+    analyserRef.current = analyser;
+
+    const buffer = new Uint8Array(analyser.frequencyBinCount);
+    const tick = () => {
+      if (!analyserRef.current) return;
+      analyserRef.current.getByteFrequencyData(buffer);
+      const next: number[] = [];
+      const step = Math.max(1, Math.floor(buffer.length / BAR_COUNT));
+      for (let i = 0; i < BAR_COUNT; i++) {
+        const v = buffer[i * step] ?? 0;
+        // Map 0–255 → 4–40 px bar height
+        next.push(4 + (v / 255) * 36);
+      }
+      setLevels(next);
+      rafRef.current = requestAnimationFrame(tick);
+    };
+    tick();
+  };
+
   const start = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      streamRef.current = stream;
       const mime = MediaRecorder.isTypeSupported('audio/webm') ? 'audio/webm' : '';
       const mr = new MediaRecorder(stream, mime ? { mimeType: mime } : undefined);
       chunksRef.current = [];
@@ -36,13 +84,15 @@ const VoiceRecorder = ({ onRecorded, recordedFile, onClear }: Props) => {
         const ext = (mr.mimeType || 'audio/webm').includes('mp4') ? 'm4a' : 'webm';
         const file = new File([blob], `voicenote-${Date.now()}.${ext}`, { type: blob.type });
         onRecorded(file);
-        stream.getTracks().forEach(t => t.stop());
+        cleanupAudio();
+        setLevels(Array(BAR_COUNT).fill(4));
       };
       mr.start();
       mediaRecRef.current = mr;
       setRecording(true);
       setSeconds(0);
       timerRef.current = window.setInterval(() => setSeconds(s => s + 1), 1000);
+      startVisualizer(stream);
     } catch (e: any) {
       toast.error('Microphone access denied');
     }
@@ -67,17 +117,34 @@ const VoiceRecorder = ({ onRecorded, recordedFile, onClear }: Props) => {
       {!recordedFile && (
         <div className="flex items-center gap-3 p-4 bg-muted rounded-xl neumorphic-inset">
           {!recording ? (
-            <Button type="button" onClick={start} className="bg-primary text-primary-foreground rounded-full w-12 h-12 p-0">
+            <Button type="button" onClick={start} className="bg-primary text-primary-foreground rounded-full w-12 h-12 p-0 flex-shrink-0">
               <Mic className="w-5 h-5" />
             </Button>
           ) : (
-            <Button type="button" onClick={stop} className="bg-destructive text-destructive-foreground rounded-full w-12 h-12 p-0 animate-pulse">
+            <Button type="button" onClick={stop} className="bg-destructive text-destructive-foreground rounded-full w-12 h-12 p-0 animate-pulse flex-shrink-0">
               <Square className="w-5 h-5" />
             </Button>
           )}
-          <div className="flex-1">
-            <p className="text-sm font-medium text-foreground">{recording ? 'Recording…' : 'Tap to record'}</p>
-            <p className="text-xs text-muted-foreground">{fmt(seconds)}</p>
+          <div className="flex-1 min-w-0">
+            {recording ? (
+              <>
+                <div className="flex items-end justify-between gap-[2px] h-10 mb-1">
+                  {levels.map((h, i) => (
+                    <div
+                      key={i}
+                      className="flex-1 rounded-full bg-primary transition-all duration-75"
+                      style={{ height: `${h}px`, opacity: 0.4 + (h / 40) * 0.6 }}
+                    />
+                  ))}
+                </div>
+                <p className="text-xs text-muted-foreground tabular-nums">{fmt(seconds)} • Recording…</p>
+              </>
+            ) : (
+              <>
+                <p className="text-sm font-medium text-foreground">Tap to record</p>
+                <p className="text-xs text-muted-foreground">{fmt(seconds)}</p>
+              </>
+            )}
           </div>
         </div>
       )}
