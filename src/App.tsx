@@ -14,6 +14,7 @@ import PrayerPage from "./pages/PrayerPage";
 import GalleryPage from "./pages/GalleryPage";
 import ProfilePage from "./pages/ProfilePage";
 import AdminPage from "./pages/AdminPage";
+import SettingsPage from "./pages/SettingsPage";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -44,7 +45,8 @@ const AppRoutes = () => (
     <Route path="/prayer" element={<ProtectedRoute><PrayerPage /></ProtectedRoute>} />
     <Route path="/gallery" element={<ProtectedRoute><GalleryPage /></ProtectedRoute>} />
     <Route path="/profile" element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
-    <Route path="/admin" element={<ProtectedRoute><AdminPage /></ProtectedRoute>} />
+     <Route path="/admin" element={<ProtectedRoute><AdminPage /></ProtectedRoute>} />
+    <Route path="/settings" element={<ProtectedRoute><SettingsPage /></ProtectedRoute>} />
     <Route path="*" element={<NotFound />} />
   </Routes>
 );
