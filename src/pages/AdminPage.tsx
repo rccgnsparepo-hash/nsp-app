@@ -106,23 +106,34 @@ const AdminPage = () => {
     if (!vnFile) { toast.error('Please record or choose an audio file'); return; }
     setVnLoading(true);
     try {
-      const path = `${Date.now()}-${vnFile.name}`;
+      // Verify session first — RLS needs an authenticated admin
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('You must be signed in');
+
+      // Sanitize filename (storage rejects spaces / special chars in some keys)
+      const safeName = vnFile.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+      const path = `${user.id}/${Date.now()}-${safeName}`;
+
       const { error: upErr } = await supabase.storage.from('voicenotes').upload(path, vnFile, {
         contentType: vnFile.type || 'audio/webm',
+        upsert: false,
       });
-      if (upErr) throw upErr;
+      if (upErr) throw new Error(`Storage: ${upErr.message}`);
+
       const { data: { publicUrl } } = supabase.storage.from('voicenotes').getPublicUrl(path);
       const { error } = await supabase.from('posts').insert({
         caption: vnCaption || null,
         video_url: publicUrl,
         type: 'voice',
+        user_id: user.id, // satisfies both admin & user_id RLS policies
       });
-      if (error) throw error;
+      if (error) throw new Error(`DB: ${error.message}`);
+
       setVnCaption('');
       setVnFile(null);
       toast.success('Voice note posted!');
     } catch (e: any) {
-      toast.error(e.message);
+      toast.error(e.message || 'Failed to post voice note');
     } finally {
       setVnLoading(false);
     }
