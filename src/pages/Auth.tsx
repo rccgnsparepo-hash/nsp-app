@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
 import { Eye, EyeOff, Camera, Shield } from 'lucide-react';
+import logo from '@/assets/rccg-nsp-logo.jpg';
 
 const Auth = () => {
   const [isLogin, setIsLogin] = useState(true);
@@ -129,23 +130,31 @@ const Auth = () => {
       >
         <div className="text-center mb-8">
           <motion.div
-            initial={{ scale: 0.8 }}
-            animate={{ scale: 1 }}
-            className={`w-20 h-20 rounded-2xl mx-auto mb-4 flex items-center justify-center ${
-              isAdminMode ? 'bg-amber-500' : 'bg-primary'
-            }`}
+            initial={{ scale: 0.8, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            transition={{ type: 'spring', stiffness: 140, damping: 14 }}
+            className="relative w-28 h-28 mx-auto mb-4"
           >
             {isAdminMode ? (
-              <Shield className="w-9 h-9 text-primary-foreground" />
+              <div className="w-full h-full rounded-3xl bg-amber-500 flex items-center justify-center shadow-2xl shadow-amber-500/40">
+                <Shield className="w-12 h-12 text-white" />
+              </div>
             ) : (
-              <span className="text-primary-foreground text-3xl font-bold font-display">N</span>
+              <>
+                <div className="absolute inset-0 rounded-3xl bg-primary/20 blur-2xl" />
+                <img
+                  src={logo}
+                  alt="RCCG NSP"
+                  className="relative w-full h-full object-contain rounded-2xl"
+                />
+              </>
             )}
           </motion.div>
-          <h1 className="text-2xl font-bold font-display text-foreground">
-            {isAdminMode ? 'Admin Access' : 'NSP App'}
+          <h1 className="text-2xl font-bold font-display text-foreground tracking-tight">
+            {isAdminMode ? 'Admin Access' : 'RCCG N.S.P'}
           </h1>
-          <p className="text-muted-foreground mt-1">
-            {isLogin ? 'Welcome back' : 'Create your account'}
+          <p className="text-muted-foreground mt-1 text-sm">
+            {isLogin ? 'Welcome back to the community' : 'Join the family — create your account'}
           </p>
         </div>
 
