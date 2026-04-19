@@ -341,6 +341,33 @@ export type Database = {
         }
         Relationships: []
       }
+      user_push_subscriptions: {
+        Row: {
+          created_at: string
+          id: string
+          platform: string
+          player_id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          platform?: string
+          player_id: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          platform?: string
+          player_id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       user_roles: {
         Row: {
           id: string
@@ -403,6 +430,10 @@ export type Database = {
           _user_id: string
         }
         Returns: boolean
+      }
+      invoke_push_broadcast: {
+        Args: { _body: string; _data: Json; _title: string }
+        Returns: undefined
       }
       record_daily_login: {
         Args: { _user_id: string }
