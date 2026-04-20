@@ -8,12 +8,16 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/components/AppLayout';
 import AppHeader from '@/components/AppHeader';
-import { Camera, LogOut, Save } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import AttendanceSection from '@/components/AttendanceSection';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Camera, LogOut, User as UserIcon, ClipboardCheck } from 'lucide-react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 
 const ProfilePage = () => {
   const { profile, user, signOut, refreshProfile } = useAuth();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const initialTab = searchParams.get('tab') === 'attendance' ? 'attendance' : 'details';
   const [editing, setEditing] = useState(false);
   const [fullName, setFullName] = useState(profile?.full_name || '');
   const [dob, setDob] = useState(profile?.date_of_birth || '');
