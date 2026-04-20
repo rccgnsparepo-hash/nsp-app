@@ -8,12 +8,16 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/components/AppLayout';
 import AppHeader from '@/components/AppHeader';
-import { Camera, LogOut, Save } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import AttendanceSection from '@/components/AttendanceSection';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Camera, LogOut, User as UserIcon, ClipboardCheck } from 'lucide-react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 
 const ProfilePage = () => {
   const { profile, user, signOut, refreshProfile } = useAuth();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const initialTab = searchParams.get('tab') === 'attendance' ? 'attendance' : 'details';
   const [editing, setEditing] = useState(false);
   const [fullName, setFullName] = useState(profile?.full_name || '');
   const [dob, setDob] = useState(profile?.date_of_birth || '');
@@ -87,63 +91,78 @@ const ProfilePage = () => {
           <p className="text-sm text-muted-foreground">{profile?.email}</p>
         </motion.div>
 
-        {/* Profile Details */}
-        <div className="neumorphic rounded-2xl p-4 bg-card space-y-4">
-          <div className="flex items-center justify-between">
-            <h3 className="font-semibold text-foreground">Details</h3>
-            <button
-              onClick={() => {
-                if (editing) handleSave();
-                else {
-                  setFullName(profile?.full_name || '');
-                  setDob(profile?.date_of_birth || '');
-                  setEditing(true);
-                }
-              }}
-              className="text-primary text-sm font-medium"
+        <Tabs defaultValue={initialTab} onValueChange={(v) => setSearchParams(v === 'attendance' ? { tab: 'attendance' } : {})} className="w-full">
+          <TabsList className="w-full bg-muted rounded-xl grid grid-cols-2 h-10">
+            <TabsTrigger value="details" className="rounded-lg text-xs data-[state=active]:bg-card data-[state=active]:shadow-sm">
+              <UserIcon className="w-3.5 h-3.5 mr-1" />Details
+            </TabsTrigger>
+            <TabsTrigger value="attendance" className="rounded-lg text-xs data-[state=active]:bg-card data-[state=active]:shadow-sm">
+              <ClipboardCheck className="w-3.5 h-3.5 mr-1" />Attendance
+            </TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="details" className="mt-4 space-y-6">
+            <div className="neumorphic rounded-2xl p-4 bg-card space-y-4">
+              <div className="flex items-center justify-between">
+                <h3 className="font-semibold text-foreground">Details</h3>
+                <button
+                  onClick={() => {
+                    if (editing) handleSave();
+                    else {
+                      setFullName(profile?.full_name || '');
+                      setDob(profile?.date_of_birth || '');
+                      setEditing(true);
+                    }
+                  }}
+                  className="text-primary text-sm font-medium"
+                >
+                  {editing ? (saving ? 'Saving...' : 'Save') : 'Edit'}
+                </button>
+              </div>
+
+              {editing ? (
+                <div className="space-y-3">
+                  <div>
+                    <Label className="text-foreground">Full Name</Label>
+                    <Input value={fullName} onChange={(e) => setFullName(e.target.value)} className="mt-1 bg-muted border-0 neumorphic-inset" />
+                  </div>
+                  <div>
+                    <Label className="text-foreground">Date of Birth</Label>
+                    <Input type="date" value={dob} onChange={(e) => setDob(e.target.value)} className="mt-1 bg-muted border-0 neumorphic-inset" />
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  <div className="flex justify-between py-2 border-b border-border">
+                    <span className="text-sm text-muted-foreground">Name</span>
+                    <span className="text-sm text-foreground">{profile?.full_name}</span>
+                  </div>
+                  <div className="flex justify-between py-2 border-b border-border">
+                    <span className="text-sm text-muted-foreground">Email</span>
+                    <span className="text-sm text-foreground">{profile?.email}</span>
+                  </div>
+                  <div className="flex justify-between py-2">
+                    <span className="text-sm text-muted-foreground">Birthday</span>
+                    <span className="text-sm text-foreground">{profile?.date_of_birth || 'Not set'}</span>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <Button
+              onClick={handleSignOut}
+              variant="outline"
+              className="w-full rounded-xl border-destructive text-destructive hover:bg-destructive hover:text-destructive-foreground"
             >
-              {editing ? (saving ? 'Saving...' : 'Save') : 'Edit'}
-            </button>
-          </div>
+              <LogOut className="w-4 h-4 mr-2" />
+              Sign Out
+            </Button>
+          </TabsContent>
 
-          {editing ? (
-            <div className="space-y-3">
-              <div>
-                <Label className="text-foreground">Full Name</Label>
-                <Input value={fullName} onChange={(e) => setFullName(e.target.value)} className="mt-1 bg-muted border-0 neumorphic-inset" />
-              </div>
-              <div>
-                <Label className="text-foreground">Date of Birth</Label>
-                <Input type="date" value={dob} onChange={(e) => setDob(e.target.value)} className="mt-1 bg-muted border-0 neumorphic-inset" />
-              </div>
-            </div>
-          ) : (
-            <div className="space-y-3">
-              <div className="flex justify-between py-2 border-b border-border">
-                <span className="text-sm text-muted-foreground">Name</span>
-                <span className="text-sm text-foreground">{profile?.full_name}</span>
-              </div>
-              <div className="flex justify-between py-2 border-b border-border">
-                <span className="text-sm text-muted-foreground">Email</span>
-                <span className="text-sm text-foreground">{profile?.email}</span>
-              </div>
-              <div className="flex justify-between py-2">
-                <span className="text-sm text-muted-foreground">Birthday</span>
-                <span className="text-sm text-foreground">{profile?.date_of_birth || 'Not set'}</span>
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* Sign Out */}
-        <Button
-          onClick={handleSignOut}
-          variant="outline"
-          className="w-full rounded-xl border-destructive text-destructive hover:bg-destructive hover:text-destructive-foreground"
-        >
-          <LogOut className="w-4 h-4 mr-2" />
-          Sign Out
-        </Button>
+          <TabsContent value="attendance" className="mt-4">
+            <AttendanceSection />
+          </TabsContent>
+        </Tabs>
       </div>
     </AppLayout>
   );
