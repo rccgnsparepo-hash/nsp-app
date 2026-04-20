@@ -8,6 +8,7 @@ import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { NotificationsProvider } from "@/hooks/useRealtimeNotifications";
 import NotificationOverlay from "@/components/NotificationOverlay";
 import SplashScreen from "@/components/SplashScreen";
+import PushDebugPanel from "@/components/PushDebugPanel";
 import Auth from "./pages/Auth";
 import HomePage from "./pages/HomePage";
 import PrayerPage from "./pages/PrayerPage";
@@ -27,6 +28,7 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
     <NotificationsProvider>
       <NotificationOverlay />
       {children}
+      <PushDebugPanel />
     </NotificationsProvider>
   );
 };
