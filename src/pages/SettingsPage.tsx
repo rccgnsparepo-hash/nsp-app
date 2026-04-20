@@ -1,15 +1,14 @@
 import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
-import { useQuery } from '@tanstack/react-query';
-import { Moon, Sun, Send, Users, Inbox, Check } from 'lucide-react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { Moon, Sun, Send, Users, Inbox, MessageCircle } from 'lucide-react';
 import { toast } from 'sonner';
+import { useNavigate } from 'react-router-dom';
 import AppLayout from '@/components/AppLayout';
 import AppHeader from '@/components/AppHeader';
 import { Switch } from '@/components/ui/switch';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { format } from 'date-fns';
@@ -18,12 +17,11 @@ const STORAGE_KEY = 'nsp-theme';
 
 const SettingsPage = () => {
   const { user, profile } = useAuth();
+  const navigate = useNavigate();
+  const qc = useQueryClient();
   const [isDark, setIsDark] = useState(false);
-  const [openUser, setOpenUser] = useState<any | null>(null);
-  const [message, setMessage] = useState('Hi 👋');
-  const [sending, setSending] = useState(false);
 
-  // Init theme from localStorage / profile
+  // Theme
   useEffect(() => {
     const stored = localStorage.getItem(STORAGE_KEY) || profile?.theme_preference;
     const dark = stored === 'dark';
@@ -40,7 +38,7 @@ const SettingsPage = () => {
     }
   };
 
-  // Registered users list
+  // Members
   const { data: users, isLoading: usersLoading } = useQuery({
     queryKey: ['registered-users'],
     queryFn: async () => {
@@ -53,87 +51,79 @@ const SettingsPage = () => {
     },
   });
 
-  // Inbox
-  const { data: inbox, refetch: refetchInbox } = useQuery({
-    queryKey: ['direct-messages-inbox', user?.id],
+  // Inbox - from notifications table (logs every push)
+  const { data: notifications } = useQuery({
+    queryKey: ['notifications-inbox', user?.id],
     queryFn: async () => {
       if (!user) return [];
       const { data, error } = await supabase
-        .from('direct_messages')
+        .from('notifications')
         .select('*')
-        .eq('recipient_id', user.id)
-        .order('created_at', { ascending: false });
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false })
+        .limit(100);
       if (error) throw error;
       return data;
     },
     enabled: !!user,
   });
 
-  // Realtime subscription for inbox
   useEffect(() => {
     if (!user) return;
     const ch = supabase
-      .channel('dm-inbox')
+      .channel('notif-inbox')
       .on('postgres_changes', {
-        event: 'INSERT',
-        schema: 'public',
-        table: 'direct_messages',
-        filter: `recipient_id=eq.${user.id}`,
-      }, () => refetchInbox())
+        event: '*', schema: 'public', table: 'notifications',
+        filter: `user_id=eq.${user.id}`,
+      }, () => qc.invalidateQueries({ queryKey: ['notifications-inbox', user.id] }))
       .subscribe();
     return () => { supabase.removeChannel(ch); };
-  }, [user, refetchInbox]);
+  }, [user, qc]);
 
-  // Fetch sender profiles for inbox messages
-  const senderIds = Array.from(new Set((inbox ?? []).map((m: any) => m.sender_id)));
-  const { data: senderProfiles } = useQuery({
-    queryKey: ['dm-senders', senderIds.join(',')],
-    queryFn: async () => {
-      if (senderIds.length === 0) return [];
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('id, full_name, profile_image_url')
-        .in('id', senderIds);
-      if (error) throw error;
-      return data;
-    },
-    enabled: senderIds.length > 0,
-  });
-  const senderMap = new Map((senderProfiles ?? []).map((p: any) => [p.id, p]));
-
-  const sendMessage = async () => {
-    if (!user || !openUser) return;
-    if (!message.trim()) { toast.error('Message cannot be empty'); return; }
-    setSending(true);
+  const sayHi = async (recipient: any) => {
+    if (!user) return;
     try {
       const { error } = await supabase.from('direct_messages').insert({
         sender_id: user.id,
-        recipient_id: openUser.id,
-        content: message.trim(),
+        recipient_id: recipient.id,
+        content: 'Hi 👋',
       });
       if (error) throw error;
-      toast.success(`Message sent to ${openUser.full_name?.split(' ')[0] || 'user'} 👋`);
-      setOpenUser(null);
-      setMessage('Hi 👋');
+      toast.success(`Hi sent to ${recipient.full_name?.split(' ')[0]}`);
+      navigate(`/chat/${recipient.id}`);
     } catch (e: any) {
       toast.error(e.message);
-    } finally {
-      setSending(false);
     }
   };
 
-  const markRead = async (id: string) => {
-    await supabase.from('direct_messages').update({ read: true }).eq('id', id);
-    refetchInbox();
+  const openChatFromNotif = async (n: any) => {
+    // Mark read
+    await supabase.from('notifications').update({ read: true }).eq('id', n.id);
+    qc.invalidateQueries({ queryKey: ['notifications-inbox', user?.id] });
+
+    if (n.kind === 'message' && n.data?.sender_id) {
+      navigate(`/chat/${n.data.sender_id}`);
+    } else if (n.kind === 'prayer') {
+      navigate('/prayer');
+    } else if (n.kind === 'attendance_session' || n.kind === 'attendance_review' || n.kind === 'attendance_pending') {
+      navigate('/profile?tab=attendance');
+    } else {
+      navigate('/');
+    }
   };
 
-  const unreadCount = (inbox ?? []).filter((m: any) => !m.read).length;
+  const markAllRead = async () => {
+    if (!user) return;
+    await supabase.from('notifications').update({ read: true }).eq('user_id', user.id).eq('read', false);
+    qc.invalidateQueries({ queryKey: ['notifications-inbox', user.id] });
+  };
+
+  const unreadCount = (notifications ?? []).filter((n: any) => !n.read).length;
 
   return (
     <AppLayout>
       <AppHeader title="Settings" />
       <div className="p-4 space-y-4">
-        {/* Theme */}
         <motion.div
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
@@ -151,22 +141,46 @@ const SettingsPage = () => {
           <Switch checked={isDark} onCheckedChange={toggleTheme} />
         </motion.div>
 
-        <Tabs defaultValue="users" className="w-full">
+        <Tabs defaultValue="inbox" className="w-full">
           <TabsList className="w-full bg-muted rounded-xl grid grid-cols-2 h-10">
-            <TabsTrigger value="users" className="rounded-lg text-xs data-[state=active]:bg-card data-[state=active]:shadow-sm">
-              <Users className="w-3.5 h-3.5 mr-1" />Members
-            </TabsTrigger>
             <TabsTrigger value="inbox" className="rounded-lg text-xs data-[state=active]:bg-card data-[state=active]:shadow-sm relative">
               <Inbox className="w-3.5 h-3.5 mr-1" />Inbox
               {unreadCount > 0 && (
-                <span className="absolute top-0.5 right-1.5 w-4 h-4 rounded-full bg-destructive text-destructive-foreground text-[9px] flex items-center justify-center font-bold">
-                  {unreadCount}
+                <span className="absolute top-0.5 right-1.5 min-w-[16px] h-4 px-1 rounded-full bg-destructive text-destructive-foreground text-[9px] flex items-center justify-center font-bold">
+                  {unreadCount > 99 ? '99+' : unreadCount}
                 </span>
               )}
             </TabsTrigger>
+            <TabsTrigger value="users" className="rounded-lg text-xs data-[state=active]:bg-card data-[state=active]:shadow-sm">
+              <Users className="w-3.5 h-3.5 mr-1" />Members
+            </TabsTrigger>
           </TabsList>
 
-          {/* Members */}
+          <TabsContent value="inbox" className="mt-4 space-y-2">
+            {unreadCount > 0 && (
+              <button onClick={markAllRead} className="w-full text-xs text-primary font-medium py-2">Mark all as read</button>
+            )}
+            {notifications && notifications.length > 0 ? notifications.map((n: any) => (
+              <button
+                key={n.id}
+                onClick={() => openChatFromNotif(n)}
+                className={`w-full text-left neumorphic-sm rounded-2xl p-3 bg-card flex items-start gap-3 ${!n.read ? 'border-l-4 border-primary' : ''}`}
+              >
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-sm font-semibold text-foreground truncate">{n.title}</p>
+                    <span className="text-[10px] text-muted-foreground flex-shrink-0">
+                      {format(new Date(n.created_at), 'MMM d · h:mm a')}
+                    </span>
+                  </div>
+                  <p className="text-sm text-muted-foreground mt-0.5 break-words line-clamp-2">{n.body}</p>
+                </div>
+              </button>
+            )) : (
+              <p className="text-sm text-muted-foreground text-center py-10">No notifications yet</p>
+            )}
+          </TabsContent>
+
           <TabsContent value="users" className="mt-4 space-y-2">
             {usersLoading && <p className="text-sm text-muted-foreground text-center py-6">Loading…</p>}
             {users?.map((u: any) => (
@@ -187,13 +201,22 @@ const SettingsPage = () => {
                   </p>
                 </div>
                 {u.id !== user?.id && (
-                  <Button
-                    size="sm"
-                    onClick={() => { setOpenUser(u); setMessage('Hi 👋'); }}
-                    className="bg-primary text-primary-foreground rounded-full h-8 px-3 text-xs"
-                  >
-                    <Send className="w-3 h-3 mr-1" />Hi
-                  </Button>
+                  <>
+                    <Button
+                      size="sm" variant="outline"
+                      onClick={() => navigate(`/chat/${u.id}`)}
+                      className="rounded-full h-8 px-3 text-xs"
+                    >
+                      <MessageCircle className="w-3 h-3 mr-1" />Chat
+                    </Button>
+                    <Button
+                      size="sm"
+                      onClick={() => sayHi(u)}
+                      className="bg-primary text-primary-foreground rounded-full h-8 px-3 text-xs"
+                    >
+                      <Send className="w-3 h-3 mr-1" />Hi
+                    </Button>
+                  </>
                 )}
               </div>
             ))}
@@ -201,68 +224,8 @@ const SettingsPage = () => {
               <p className="text-sm text-muted-foreground text-center py-6">No registered users yet</p>
             )}
           </TabsContent>
-
-          {/* Inbox */}
-          <TabsContent value="inbox" className="mt-4 space-y-2">
-            {inbox && inbox.length > 0 ? inbox.map((m: any) => {
-              const sender = senderMap.get(m.sender_id);
-              return (
-                <div
-                  key={m.id}
-                  className={`neumorphic-sm rounded-2xl p-3 bg-card flex items-start gap-3 ${!m.read ? 'border-l-4 border-primary' : ''}`}
-                >
-                  <div className="w-10 h-10 rounded-full bg-muted overflow-hidden flex-shrink-0">
-                    {sender?.profile_image_url ? (
-                      <img src={sender.profile_image_url} alt="" className="w-full h-full object-cover" />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center text-sm font-semibold text-muted-foreground">
-                        {sender?.full_name?.[0]?.toUpperCase() || '?'}
-                      </div>
-                    )}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center justify-between gap-2">
-                      <p className="text-sm font-semibold text-foreground truncate">{sender?.full_name || 'Someone'}</p>
-                      <span className="text-[10px] text-muted-foreground flex-shrink-0">
-                        {format(new Date(m.created_at), 'MMM d · h:mm a')}
-                      </span>
-                    </div>
-                    <p className="text-sm text-foreground mt-0.5 break-words">{m.content}</p>
-                  </div>
-                  {!m.read && (
-                    <button onClick={() => markRead(m.id)} className="w-7 h-7 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
-                      <Check className="w-3.5 h-3.5 text-primary" />
-                    </button>
-                  )}
-                </div>
-              );
-            }) : (
-              <p className="text-sm text-muted-foreground text-center py-10">No messages yet</p>
-            )}
-          </TabsContent>
         </Tabs>
       </div>
-
-      {/* Send Hi Dialog */}
-      <Dialog open={!!openUser} onOpenChange={(o) => !o && setOpenUser(null)}>
-        <DialogContent className="rounded-2xl max-w-sm">
-          <DialogHeader>
-            <DialogTitle>Send a message to {openUser?.full_name?.split(' ')[0]}</DialogTitle>
-          </DialogHeader>
-          <Input
-            value={message}
-            onChange={(e) => setMessage(e.target.value)}
-            placeholder="Say hi…"
-            className="bg-muted border-0 neumorphic-inset"
-          />
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setOpenUser(null)} className="rounded-xl">Cancel</Button>
-            <Button onClick={sendMessage} disabled={sending} className="bg-primary text-primary-foreground rounded-xl">
-              <Send className="w-4 h-4 mr-1" />{sending ? 'Sending…' : 'Send'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </AppLayout>
   );
 };
