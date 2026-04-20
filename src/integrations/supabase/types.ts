@@ -462,6 +462,10 @@ export type Database = {
         Args: { _body: string; _data: Json; _title: string }
         Returns: undefined
       }
+      invoke_push_to_user: {
+        Args: { _body: string; _data: Json; _title: string; _user_id: string }
+        Returns: undefined
+      }
       record_daily_login: {
         Args: { _user_id: string }
         Returns: {
