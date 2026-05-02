@@ -60,9 +60,24 @@ export const initOneSignal = async (): Promise<void> => {
           await OneSignal.init({
             appId,
             allowLocalhostAsSecureOrigin: true,
-            notifyButton: { enable: false },
+            serviceWorkerPath: "/OneSignalSDKWorker.js",
+            serviceWorkerUpdaterPath: "/OneSignalSDKUpdaterWorker.js",
+            notifyButton: { enable: true },
           });
           window.__oneSignalLoaded = true;
+          // Auto-upsert player id whenever subscription changes
+          try {
+            OneSignal.User.PushSubscription.addEventListener("change", async (ev: any) => {
+              const id = ev?.current?.id ?? OneSignal?.User?.PushSubscription?.id ?? null;
+              const ext = OneSignal?.User?.externalId ?? null;
+              if (id && ext) {
+                await supabase.from("user_push_subscriptions").upsert(
+                  { user_id: ext, player_id: id, platform: "web", updated_at: new Date().toISOString() },
+                  { onConflict: "user_id,player_id" },
+                );
+              }
+            });
+          } catch {}
         } catch (e) {
           console.warn("[OneSignal] init error", e);
         } finally {
