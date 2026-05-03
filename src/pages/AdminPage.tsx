@@ -12,8 +12,9 @@ import AppLayout from '@/components/AppLayout';
 import AppHeader from '@/components/AppHeader';
 import VoiceRecorder from '@/components/VoiceRecorder';
 import { useBirthdays } from '@/hooks/useBirthdays';
-import { Upload, Trash2, Users, FileText, Image as ImageIcon, Cake, Link2, FileDown, Mic } from 'lucide-react';
+import { Upload, Trash2, Users, FileText, Image as ImageIcon, Cake, Link2, FileDown, Mic, BellRing } from 'lucide-react';
 import { extractYoutubeId } from '@/lib/youtube';
+import PushDiagnostics from '@/components/admin/PushDiagnostics';
 
 const AdminPage = () => {
   const { isAdmin } = useAuth();
@@ -244,7 +245,7 @@ const AdminPage = () => {
 
       <div className="p-4">
         <Tabs defaultValue="posts" className="w-full">
-          <TabsList className="w-full bg-muted rounded-xl grid grid-cols-6 h-10">
+          <TabsList className="w-full bg-muted rounded-xl grid grid-cols-7 h-10">
             <TabsTrigger value="posts" className="rounded-lg text-[10px] data-[state=active]:bg-card data-[state=active]:shadow-sm">
               <FileText className="w-3.5 h-3.5 mr-0.5" />Posts
             </TabsTrigger>
@@ -262,6 +263,9 @@ const AdminPage = () => {
             </TabsTrigger>
             <TabsTrigger value="birthdays" className="rounded-lg text-[10px] data-[state=active]:bg-card data-[state=active]:shadow-sm">
               <Cake className="w-3.5 h-3.5 mr-0.5" />B-day
+            </TabsTrigger>
+            <TabsTrigger value="push" className="rounded-lg text-[10px] data-[state=active]:bg-card data-[state=active]:shadow-sm">
+              <BellRing className="w-3.5 h-3.5 mr-0.5" />Push
             </TabsTrigger>
           </TabsList>
 
@@ -461,6 +465,11 @@ const AdminPage = () => {
                 </span>
               </div>
             ))}
+          </TabsContent>
+
+          {/* Push diagnostics */}
+          <TabsContent value="push" className="mt-4">
+            <PushDiagnostics />
           </TabsContent>
         </Tabs>
       </div>

@@ -9,7 +9,7 @@ const NotificationBell = () => {
 
   return (
     <button
-      onClick={() => { markAllRead(); navigate('/settings'); }}
+      onClick={() => { markAllRead(); navigate('/inbox'); }}
       className="relative w-9 h-9 rounded-full bg-muted flex items-center justify-center neumorphic-sm"
       aria-label="Notifications"
     >
