@@ -1,9 +1,8 @@
 // OneSignal Web SDK loader + helpers.
 // Uses the v16 SDK loaded from CDN. Safe to call multiple times.
+// Production origin: https://nsp-main-app.vercel.app
 
 import { supabase } from "@/integrations/supabase/client";
-
-const ONESIGNAL_APP_ID = "ENV_INJECTED_APP_ID"; // overridden at runtime via fetch below
 
 type OneSignalDeferredItem = (OneSignal: any) => void | Promise<void>;
 declare global {
@@ -16,6 +15,8 @@ declare global {
 }
 
 let initPromise: Promise<void> | null = null;
+const log = (...args: any[]) => console.log("[OneSignal]", ...args);
+const warn = (...args: any[]) => console.warn("[OneSignal]", ...args);
 
 const fetchAppId = async (): Promise<string | null> => {
   if (window.__oneSignalAppId) return window.__oneSignalAppId;
@@ -27,7 +28,7 @@ const fetchAppId = async (): Promise<string | null> => {
       return data.appId;
     }
   } catch (e) {
-    console.warn("[OneSignal] could not load app id from edge function", e);
+    warn("could not load app id from edge function", e);
   }
   return null;
 };
@@ -40,19 +41,39 @@ const injectScript = () =>
     s.src = "https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js";
     s.defer = true;
     s.onload = () => resolve();
-    s.onerror = () => reject(new Error("Failed to load OneSignal SDK"));
+    s.onerror = () => reject(new Error("Failed to load OneSignal SDK (network blocked or offline)"));
     document.head.appendChild(s);
   });
+
+const upsertSubscription = async (userId: string, playerId: string) => {
+  try {
+    const { error } = await supabase
+      .from("user_push_subscriptions")
+      .upsert(
+        { user_id: userId, player_id: playerId, platform: "web", updated_at: new Date().toISOString() },
+        { onConflict: "user_id,player_id" },
+      );
+    if (error) warn("upsert subscription failed", error);
+    else log("subscription stored", { userId, playerId });
+  } catch (e) {
+    warn("upsert subscription threw", e);
+  }
+};
 
 export const initOneSignal = async (): Promise<void> => {
   if (initPromise) return initPromise;
   initPromise = (async () => {
     const appId = await fetchAppId();
     if (!appId) {
-      console.warn("[OneSignal] No app id available, skipping init");
+      warn("No app id available, skipping init");
       return;
     }
-    await injectScript();
+    try {
+      await injectScript();
+    } catch (e) {
+      warn(e);
+      return;
+    }
     window.OneSignalDeferred = window.OneSignalDeferred || [];
     await new Promise<void>((resolve) => {
       window.OneSignalDeferred!.push(async (OneSignal) => {
@@ -62,24 +83,30 @@ export const initOneSignal = async (): Promise<void> => {
             allowLocalhostAsSecureOrigin: true,
             serviceWorkerPath: "/OneSignalSDKWorker.js",
             serviceWorkerUpdaterPath: "/OneSignalSDKUpdaterWorker.js",
-            notifyButton: { enable: true },
+            serviceWorkerParam: { scope: "/" },
+            welcomeNotification: { disable: true },
+            notifyButton: { enable: false },
           });
           window.__oneSignalLoaded = true;
+          log("init complete", {
+            permission: OneSignal?.Notifications?.permission,
+            playerId: OneSignal?.User?.PushSubscription?.id ?? null,
+            externalId: OneSignal?.User?.externalId ?? null,
+          });
+
           // Auto-upsert player id whenever subscription changes
           try {
             OneSignal.User.PushSubscription.addEventListener("change", async (ev: any) => {
               const id = ev?.current?.id ?? OneSignal?.User?.PushSubscription?.id ?? null;
               const ext = OneSignal?.User?.externalId ?? null;
-              if (id && ext) {
-                await supabase.from("user_push_subscriptions").upsert(
-                  { user_id: ext, player_id: id, platform: "web", updated_at: new Date().toISOString() },
-                  { onConflict: "user_id,player_id" },
-                );
-              }
+              log("subscription change", { id, ext });
+              if (id && ext) await upsertSubscription(ext, id);
             });
-          } catch {}
+          } catch (e) {
+            warn("attach change listener failed", e);
+          }
         } catch (e) {
-          console.warn("[OneSignal] init error", e);
+          warn("init error", e);
         } finally {
           resolve();
         }
@@ -96,8 +123,10 @@ export const requestPushPermission = async (): Promise<boolean> => {
     window.OneSignalDeferred.push(async (OneSignal) => {
       try {
         const granted = await OneSignal.Notifications.requestPermission();
+        log("permission requested →", granted);
         resolve(!!granted);
-      } catch {
+      } catch (e) {
+        warn("permission request failed", e);
         resolve(false);
       }
     });
@@ -110,7 +139,6 @@ export const getPlayerId = async (): Promise<string | null> => {
     window.OneSignalDeferred = window.OneSignalDeferred || [];
     window.OneSignalDeferred.push(async (OneSignal) => {
       try {
-        // v16 exposes the subscription id (player id) via User.PushSubscription.id
         const id = OneSignal?.User?.PushSubscription?.id ?? null;
         resolve(id);
       } catch {
@@ -126,12 +154,13 @@ export const linkUserToPush = async (userId: string, email?: string | null) => {
   window.OneSignalDeferred.push(async (OneSignal) => {
     try {
       await OneSignal.login(userId);
+      log("login(external_id)", userId);
       if (email) await OneSignal.User.addEmail(email).catch(() => {});
 
       // Wait briefly for the subscription id to be assigned
       let attempts = 0;
       let playerId: string | null = null;
-      while (attempts < 12 && !playerId) {
+      while (attempts < 20 && !playerId) {
         playerId = OneSignal?.User?.PushSubscription?.id ?? null;
         if (!playerId) {
           await new Promise((r) => setTimeout(r, 500));
@@ -140,15 +169,12 @@ export const linkUserToPush = async (userId: string, email?: string | null) => {
       }
 
       if (playerId) {
-        await supabase
-          .from("user_push_subscriptions")
-          .upsert(
-            { user_id: userId, player_id: playerId, platform: "web", updated_at: new Date().toISOString() },
-            { onConflict: "user_id,player_id" },
-          );
+        await upsertSubscription(userId, playerId);
+      } else {
+        warn("no playerId yet after login (user may not have granted permission)");
       }
     } catch (e) {
-      console.warn("[OneSignal] linkUserToPush failed", e);
+      warn("linkUserToPush failed", e);
     }
   });
 };
@@ -157,6 +183,6 @@ export const logoutOneSignal = async () => {
   if (!window.__oneSignalLoaded) return;
   window.OneSignalDeferred = window.OneSignalDeferred || [];
   window.OneSignalDeferred.push(async (OneSignal) => {
-    try { await OneSignal.logout(); } catch {}
+    try { await OneSignal.logout(); log("logout"); } catch {}
   });
 };

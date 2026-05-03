@@ -573,6 +573,15 @@ export type Database = {
         Args: { _body: string; _data: Json; _title: string; _user_id: string }
         Returns: undefined
       }
+      notify_users: {
+        Args: {
+          _body: string
+          _data: Json
+          _title: string
+          _user_ids: string[]
+        }
+        Returns: undefined
+      }
       record_daily_login: {
         Args: { _user_id: string }
         Returns: {
