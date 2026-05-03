@@ -199,6 +199,54 @@ export type Database = {
         }
         Relationships: []
       }
+      notification_dispatch_logs: {
+        Row: {
+          body: string | null
+          created_at: string
+          error: string | null
+          id: string
+          onesignal_id: string | null
+          raw_response: Json | null
+          recipients: number | null
+          request_payload: Json | null
+          status: string
+          target_type: string | null
+          target_value: Json | null
+          title: string | null
+          user_ids: string[] | null
+        }
+        Insert: {
+          body?: string | null
+          created_at?: string
+          error?: string | null
+          id?: string
+          onesignal_id?: string | null
+          raw_response?: Json | null
+          recipients?: number | null
+          request_payload?: Json | null
+          status?: string
+          target_type?: string | null
+          target_value?: Json | null
+          title?: string | null
+          user_ids?: string[] | null
+        }
+        Update: {
+          body?: string | null
+          created_at?: string
+          error?: string | null
+          id?: string
+          onesignal_id?: string | null
+          raw_response?: Json | null
+          recipients?: number | null
+          request_payload?: Json | null
+          status?: string
+          target_type?: string | null
+          target_value?: Json | null
+          title?: string | null
+          user_ids?: string[] | null
+        }
+        Relationships: []
+      }
       notifications: {
         Row: {
           body: string
