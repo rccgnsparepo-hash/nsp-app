@@ -218,6 +218,14 @@ const ChatListPage = () => {
             </motion.button>
           );
         })}
+
+        {hasMore && messages.length > 0 && (
+          <div className="pt-2 flex justify-center">
+            <Button variant="outline" size="sm" onClick={loadMore} disabled={loadingMore} className="rounded-full text-xs">
+              {loadingMore ? 'Loading…' : 'Load older messages'}
+            </Button>
+          </div>
+        )}
       </div>
     </AppLayout>
   );
