@@ -17,6 +17,7 @@ import ProfilePage from "./pages/ProfilePage";
 import AdminPage from "./pages/AdminPage";
 import SettingsPage from "./pages/SettingsPage";
 import ChatThreadPage from "./pages/ChatThreadPage";
+import ChatListPage from "./pages/ChatListPage";
 import InboxPage from "./pages/InboxPage";
 import NotFound from "./pages/NotFound";
 
@@ -51,6 +52,7 @@ const AppRoutes = () => (
     <Route path="/profile" element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
      <Route path="/admin" element={<ProtectedRoute><AdminPage /></ProtectedRoute>} />
     <Route path="/settings" element={<ProtectedRoute><SettingsPage /></ProtectedRoute>} />
+    <Route path="/chats" element={<ProtectedRoute><ChatListPage /></ProtectedRoute>} />
     <Route path="/chat/:userId" element={<ProtectedRoute><ChatThreadPage /></ProtectedRoute>} />
     <Route path="/inbox" element={<ProtectedRoute><InboxPage /></ProtectedRoute>} />
     <Route path="*" element={<NotFound />} />
