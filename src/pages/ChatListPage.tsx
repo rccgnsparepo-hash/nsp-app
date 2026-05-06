@@ -22,29 +22,51 @@ interface Conversation {
 const ChatListPage = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const PAGE = 100;
   const [messages, setMessages] = useState<any[]>([]);
   const [profiles, setProfiles] = useState<Map<string, any>>(new Map());
   const [allUsers, setAllUsers] = useState<any[]>([]);
   const [newOpen, setNewOpen] = useState(false);
   const [search, setSearch] = useState('');
+  const [hasMore, setHasMore] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
 
-  const load = async () => {
+  const loadPage = async (before?: string) => {
     if (!user) return;
-    const { data } = await supabase
+    let q = supabase
       .from('direct_messages')
       .select('*')
       .or(`sender_id.eq.${user.id},recipient_id.eq.${user.id}`)
-      .order('created_at', { ascending: false });
-    setMessages(data || []);
+      .order('created_at', { ascending: false })
+      .limit(PAGE);
+    if (before) q = q.lt('created_at', before);
+    const { data } = await q;
+    const rows = data || [];
+    setHasMore(rows.length === PAGE);
+    setMessages(prev => before ? [...prev, ...rows] : rows);
   };
 
-  useEffect(() => { load(); }, [user]);
+  useEffect(() => { loadPage(); }, [user]);
 
+  // Realtime: patch the local list instead of full reload
   useEffect(() => {
     if (!user) return;
     const ch = supabase
       .channel('chat-list-rt')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'direct_messages' }, () => load())
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'direct_messages' }, (payload) => {
+        const m: any = payload.new;
+        if (m.sender_id !== user.id && m.recipient_id !== user.id) return;
+        setMessages(prev => prev.find(x => x.id === m.id) ? prev : [m, ...prev]);
+      })
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'direct_messages' }, (payload) => {
+        const m: any = payload.new;
+        if (m.sender_id !== user.id && m.recipient_id !== user.id) return;
+        setMessages(prev => prev.map(x => x.id === m.id ? { ...x, ...m } : x));
+      })
+      .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'direct_messages' }, (payload) => {
+        const id = (payload.old as any).id;
+        setMessages(prev => prev.filter(x => x.id !== id));
+      })
       .subscribe();
     return () => { supabase.removeChannel(ch); };
   }, [user]);
@@ -52,6 +74,7 @@ const ChatListPage = () => {
   const conversations = useMemo<Conversation[]>(() => {
     if (!user) return [];
     const map = new Map<string, Conversation>();
+    // messages already sorted desc; first one per partner is the most recent
     for (const m of messages) {
       const otherId = m.sender_id === user.id ? m.recipient_id : m.sender_id;
       const existing = map.get(otherId);
@@ -71,6 +94,14 @@ const ChatListPage = () => {
       new Date(b.lastAt).getTime() - new Date(a.lastAt).getTime()
     );
   }, [messages, user]);
+
+  const loadMore = async () => {
+    if (loadingMore || !hasMore || messages.length === 0) return;
+    setLoadingMore(true);
+    const oldest = messages[messages.length - 1].created_at;
+    await loadPage(oldest);
+    setLoadingMore(false);
+  };
 
   // Fetch profiles for conversation partners
   useEffect(() => {
