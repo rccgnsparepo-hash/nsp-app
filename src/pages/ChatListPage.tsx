@@ -30,6 +30,23 @@ const ChatListPage = () => {
   const [search, setSearch] = useState('');
   const [hasMore, setHasMore] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
+  const [unreadByUser, setUnreadByUser] = useState<Map<string, number>>(new Map());
+
+  // Fetch all unread (incoming, unread) for accurate per-conversation counts,
+  // independent of the paginated message window.
+  const refreshUnread = async () => {
+    if (!user) return;
+    const { data } = await supabase
+      .from('direct_messages')
+      .select('sender_id')
+      .eq('recipient_id', user.id)
+      .eq('read', false);
+    const map = new Map<string, number>();
+    (data || []).forEach((r: any) => {
+      map.set(r.sender_id, (map.get(r.sender_id) || 0) + 1);
+    });
+    setUnreadByUser(map);
+  };
 
   const loadPage = async (before?: string) => {
     if (!user) return;
