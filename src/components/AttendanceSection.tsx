@@ -147,8 +147,10 @@ const AttendanceSection = () => {
   const rosterForSession = (sessionId: string) =>
     (records ?? []).filter((r: any) => r.session_id === sessionId);
 
-  const exportRosterCsv = (session: any) => {
-    const roster = rosterForSession(session.id);
+  const exportRosterCsv = (session: any, statusFilter: 'all' | 'pending' | 'approved' | 'rejected' = 'all') => {
+    let roster = rosterForSession(session.id);
+    if (statusFilter !== 'all') roster = roster.filter((r: any) => r.status === statusFilter);
+    if (roster.length === 0) { toast.error('No matching attendees for this filter'); return; }
     const escape = (v: any) => {
       const s = v == null ? '' : String(v);
       return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
@@ -166,7 +168,8 @@ const AttendanceSection = () => {
     });
     const csv = [headers.join(','), ...rows].join('\n');
     const safe = session.title.replace(/[^a-z0-9-_]+/gi, '_');
-    const filename = `attendance_${safe}_${session.session_date}.csv`;
+    const suffix = statusFilter === 'all' ? '' : `_${statusFilter}`;
+    const filename = `attendance_${safe}_${session.session_date}${suffix}.csv`;
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -174,8 +177,12 @@ const AttendanceSection = () => {
     document.body.appendChild(a); a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
-    toast.success('CSV exported');
+    toast.success(`Exported ${roster.length} record${roster.length !== 1 ? 's' : ''}`);
   };
+
+  // Admin export panel state
+  const [exportSessionId, setExportSessionId] = useState<string>('');
+  const [exportStatus, setExportStatus] = useState<'all' | 'pending' | 'approved' | 'rejected'>('all');
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between">
