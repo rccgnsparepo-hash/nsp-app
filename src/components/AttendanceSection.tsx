@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger } from '@/components/ui/dialog';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
@@ -146,8 +147,10 @@ const AttendanceSection = () => {
   const rosterForSession = (sessionId: string) =>
     (records ?? []).filter((r: any) => r.session_id === sessionId);
 
-  const exportRosterCsv = (session: any) => {
-    const roster = rosterForSession(session.id);
+  const exportRosterCsv = (session: any, statusFilter: 'all' | 'pending' | 'approved' | 'rejected' = 'all') => {
+    let roster = rosterForSession(session.id);
+    if (statusFilter !== 'all') roster = roster.filter((r: any) => r.status === statusFilter);
+    if (roster.length === 0) { toast.error('No matching attendees for this filter'); return; }
     const escape = (v: any) => {
       const s = v == null ? '' : String(v);
       return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
@@ -165,7 +168,8 @@ const AttendanceSection = () => {
     });
     const csv = [headers.join(','), ...rows].join('\n');
     const safe = session.title.replace(/[^a-z0-9-_]+/gi, '_');
-    const filename = `attendance_${safe}_${session.session_date}.csv`;
+    const suffix = statusFilter === 'all' ? '' : `_${statusFilter}`;
+    const filename = `attendance_${safe}_${session.session_date}${suffix}.csv`;
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -173,8 +177,12 @@ const AttendanceSection = () => {
     document.body.appendChild(a); a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
-    toast.success('CSV exported');
+    toast.success(`Exported ${roster.length} record${roster.length !== 1 ? 's' : ''}`);
   };
+
+  // Admin export panel state
+  const [exportSessionId, setExportSessionId] = useState<string>('');
+  const [exportStatus, setExportStatus] = useState<'all' | 'pending' | 'approved' | 'rejected'>('all');
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between">
@@ -225,6 +233,47 @@ const AttendanceSection = () => {
           </Dialog>
         )}
       </div>
+
+      {isAdmin && (sessions ?? []).length > 0 && (
+        <div className="neumorphic-sm rounded-2xl p-3 bg-card space-y-2">
+          <div className="flex items-center gap-2">
+            <Download className="w-3.5 h-3.5 text-primary" />
+            <p className="text-xs font-semibold text-foreground">Export attendance CSV</p>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <Select value={exportSessionId} onValueChange={setExportSessionId}>
+              <SelectTrigger className="h-9 bg-muted border-0 text-xs"><SelectValue placeholder="Select session" /></SelectTrigger>
+              <SelectContent>
+                {(sessions ?? []).map((s: any) => (
+                  <SelectItem key={s.id} value={s.id} className="text-xs">
+                    {s.title} · {format(new Date(s.session_date), 'MMM d')}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select value={exportStatus} onValueChange={(v: any) => setExportStatus(v)}>
+              <SelectTrigger className="h-9 bg-muted border-0 text-xs"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all" className="text-xs">All statuses</SelectItem>
+                <SelectItem value="approved" className="text-xs">Approved only</SelectItem>
+                <SelectItem value="pending" className="text-xs">Pending only</SelectItem>
+                <SelectItem value="rejected" className="text-xs">Rejected only</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <Button
+            size="sm"
+            disabled={!exportSessionId}
+            onClick={() => {
+              const s = (sessions ?? []).find((x: any) => x.id === exportSessionId);
+              if (s) exportRosterCsv(s, exportStatus);
+            }}
+            className="w-full h-8 rounded-full bg-primary text-primary-foreground text-xs"
+          >
+            <Download className="w-3 h-3 mr-1" />Download CSV
+          </Button>
+        </div>
+      )}
 
       {(sessions ?? []).length === 0 && (
         <div className="neumorphic rounded-2xl p-6 bg-card text-center">

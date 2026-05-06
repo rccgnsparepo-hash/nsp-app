@@ -1,15 +1,14 @@
 import { useLocation, useNavigate } from 'react-router-dom';
-import { Home, HandHeart, Image, User, LayoutDashboard, Settings, MessageCircle } from 'lucide-react';
+import { Home, HandHeart, Image, User, LayoutDashboard, MessageCircle } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { useAuth } from '@/contexts/AuthContext';
 
 const tabs = [
   { path: '/', icon: Home, label: 'Home' },
-  { path: '/prayer', icon: HandHeart, label: 'Prayer' },
   { path: '/chats', icon: MessageCircle, label: 'Chats' },
+  { path: '/prayer', icon: HandHeart, label: 'Prayer' },
   { path: '/gallery', icon: Image, label: 'Gallery' },
   { path: '/profile', icon: User, label: 'Profile' },
-  { path: '/settings', icon: Settings, label: 'Settings' },
 ];
 
 const adminTab = { path: '/admin', icon: LayoutDashboard, label: 'Admin' };

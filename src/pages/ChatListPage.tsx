@@ -22,29 +22,77 @@ interface Conversation {
 const ChatListPage = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const PAGE = 100;
   const [messages, setMessages] = useState<any[]>([]);
   const [profiles, setProfiles] = useState<Map<string, any>>(new Map());
   const [allUsers, setAllUsers] = useState<any[]>([]);
   const [newOpen, setNewOpen] = useState(false);
   const [search, setSearch] = useState('');
+  const [hasMore, setHasMore] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [unreadByUser, setUnreadByUser] = useState<Map<string, number>>(new Map());
 
-  const load = async () => {
+  // Fetch all unread (incoming, unread) for accurate per-conversation counts,
+  // independent of the paginated message window.
+  const refreshUnread = async () => {
     if (!user) return;
     const { data } = await supabase
       .from('direct_messages')
-      .select('*')
-      .or(`sender_id.eq.${user.id},recipient_id.eq.${user.id}`)
-      .order('created_at', { ascending: false });
-    setMessages(data || []);
+      .select('sender_id')
+      .eq('recipient_id', user.id)
+      .eq('read', false);
+    const map = new Map<string, number>();
+    (data || []).forEach((r: any) => {
+      map.set(r.sender_id, (map.get(r.sender_id) || 0) + 1);
+    });
+    setUnreadByUser(map);
   };
 
-  useEffect(() => { load(); }, [user]);
+  const loadPage = async (before?: string) => {
+    if (!user) return;
+    let q = supabase
+      .from('direct_messages')
+      .select('*')
+      .or(`sender_id.eq.${user.id},recipient_id.eq.${user.id}`)
+      .order('created_at', { ascending: false })
+      .limit(PAGE);
+    if (before) q = q.lt('created_at', before);
+    const { data } = await q;
+    const rows = data || [];
+    setHasMore(rows.length === PAGE);
+    setMessages(prev => before ? [...prev, ...rows] : rows);
+  };
 
+  useEffect(() => { loadPage(); refreshUnread(); }, [user]);
+
+  // Realtime: patch the local list and refresh unread on any change
   useEffect(() => {
     if (!user) return;
     const ch = supabase
       .channel('chat-list-rt')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'direct_messages' }, () => load())
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'direct_messages' }, (payload) => {
+        const m: any = payload.new;
+        if (m.sender_id !== user.id && m.recipient_id !== user.id) return;
+        setMessages(prev => prev.find(x => x.id === m.id) ? prev : [m, ...prev]);
+        if (m.recipient_id === user.id && !m.read) {
+          setUnreadByUser(prev => {
+            const next = new Map(prev);
+            next.set(m.sender_id, (next.get(m.sender_id) || 0) + 1);
+            return next;
+          });
+        }
+      })
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'direct_messages' }, (payload) => {
+        const m: any = payload.new;
+        if (m.sender_id !== user.id && m.recipient_id !== user.id) return;
+        setMessages(prev => prev.map(x => x.id === m.id ? { ...x, ...m } : x));
+        if (m.recipient_id === user.id) refreshUnread();
+      })
+      .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'direct_messages' }, (payload) => {
+        const id = (payload.old as any).id;
+        setMessages(prev => prev.filter(x => x.id !== id));
+        refreshUnread();
+      })
       .subscribe();
     return () => { supabase.removeChannel(ch); };
   }, [user]);
@@ -54,23 +102,32 @@ const ChatListPage = () => {
     const map = new Map<string, Conversation>();
     for (const m of messages) {
       const otherId = m.sender_id === user.id ? m.recipient_id : m.sender_id;
-      const existing = map.get(otherId);
-      if (!existing) {
-        map.set(otherId, {
-          otherId,
-          lastMessage: m.content,
-          lastAt: m.created_at,
-          lastFromMe: m.sender_id === user.id,
-          unread: (!m.read && m.recipient_id === user.id) ? 1 : 0,
-        });
-      } else if (!m.read && m.recipient_id === user.id) {
-        existing.unread += 1;
+      if (map.has(otherId)) continue;
+      map.set(otherId, {
+        otherId,
+        lastMessage: m.content,
+        lastAt: m.created_at,
+        lastFromMe: m.sender_id === user.id,
+        unread: unreadByUser.get(otherId) || 0,
+      });
+    }
+    for (const [otherId, count] of unreadByUser.entries()) {
+      if (!map.has(otherId) && count > 0) {
+        map.set(otherId, { otherId, lastMessage: '', lastAt: new Date(0).toISOString(), lastFromMe: false, unread: count });
       }
     }
     return Array.from(map.values()).sort((a, b) =>
       new Date(b.lastAt).getTime() - new Date(a.lastAt).getTime()
     );
-  }, [messages, user]);
+  }, [messages, user, unreadByUser]);
+
+  const loadMore = async () => {
+    if (loadingMore || !hasMore || messages.length === 0) return;
+    setLoadingMore(true);
+    const oldest = messages[messages.length - 1].created_at;
+    await loadPage(oldest);
+    setLoadingMore(false);
+  };
 
   // Fetch profiles for conversation partners
   useEffect(() => {
@@ -187,6 +244,14 @@ const ChatListPage = () => {
             </motion.button>
           );
         })}
+
+        {hasMore && messages.length > 0 && (
+          <div className="pt-2 flex justify-center">
+            <Button variant="outline" size="sm" onClick={loadMore} disabled={loadingMore} className="rounded-full text-xs">
+              {loadingMore ? 'Loading…' : 'Load older messages'}
+            </Button>
+          </div>
+        )}
       </div>
     </AppLayout>
   );
