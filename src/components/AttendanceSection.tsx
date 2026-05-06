@@ -74,7 +74,7 @@ const AttendanceSection = () => {
     queryFn: async () => {
       if (userIds.length === 0) return [];
       const { data, error } = await supabase.from('profiles')
-        .select('id, full_name, profile_image_url').in('id', userIds);
+        .select('id, full_name, email, profile_image_url').in('id', userIds);
       if (error) throw error;
       return data;
     },
