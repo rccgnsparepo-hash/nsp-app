@@ -280,7 +280,16 @@ const AttendanceSection = () => {
       {/* Roster dialog */}
       <Dialog open={!!rosterFor} onOpenChange={(o) => !o && setRosterFor(null)}>
         <DialogContent className="rounded-2xl max-w-sm max-h-[80vh] overflow-y-auto">
-          <DialogHeader><DialogTitle>{rosterFor?.title}</DialogTitle></DialogHeader>
+          <DialogHeader>
+            <div className="flex items-center justify-between gap-2">
+              <DialogTitle className="truncate">{rosterFor?.title}</DialogTitle>
+              {isAdmin && rosterFor && rosterForSession(rosterFor.id).length > 0 && (
+                <Button size="sm" variant="outline" onClick={() => exportRosterCsv(rosterFor)} className="rounded-full h-8 px-3 text-xs flex-shrink-0">
+                  <Download className="w-3 h-3 mr-1" />CSV
+                </Button>
+              )}
+            </div>
+          </DialogHeader>
           <div className="space-y-2">
             {rosterFor && rosterForSession(rosterFor.id).length === 0 && (
               <p className="text-sm text-muted-foreground text-center py-6">Nobody marked yet</p>
