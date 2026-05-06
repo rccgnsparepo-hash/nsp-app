@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
-import { Calendar as CalendarIcon, Plus, Check, X, Users, Clock, MapPin } from 'lucide-react';
+import { Calendar as CalendarIcon, Plus, Check, X, Users, Clock, MapPin, Download } from 'lucide-react';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { Button } from '@/components/ui/button';
@@ -74,7 +74,7 @@ const AttendanceSection = () => {
     queryFn: async () => {
       if (userIds.length === 0) return [];
       const { data, error } = await supabase.from('profiles')
-        .select('id, full_name, profile_image_url').in('id', userIds);
+        .select('id, full_name, email, profile_image_url').in('id', userIds);
       if (error) throw error;
       return data;
     },
@@ -146,6 +146,35 @@ const AttendanceSection = () => {
   const rosterForSession = (sessionId: string) =>
     (records ?? []).filter((r: any) => r.session_id === sessionId);
 
+  const exportRosterCsv = (session: any) => {
+    const roster = rosterForSession(session.id);
+    const escape = (v: any) => {
+      const s = v == null ? '' : String(v);
+      return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+    };
+    const headers = ['Name', 'Email', 'Status', 'Marked At', 'Reviewed At'];
+    const rows = roster.map((r: any) => {
+      const p: any = profMap.get(r.user_id);
+      return [
+        p?.full_name || 'Unknown',
+        p?.email || '',
+        r.status,
+        new Date(r.marked_at).toISOString(),
+        r.reviewed_at ? new Date(r.reviewed_at).toISOString() : '',
+      ].map(escape).join(',');
+    });
+    const csv = [headers.join(','), ...rows].join('\n');
+    const safe = session.title.replace(/[^a-z0-9-_]+/gi, '_');
+    const filename = `attendance_${safe}_${session.session_date}.csv`;
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = filename;
+    document.body.appendChild(a); a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    toast.success('CSV exported');
+  };
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between">
@@ -251,7 +280,16 @@ const AttendanceSection = () => {
       {/* Roster dialog */}
       <Dialog open={!!rosterFor} onOpenChange={(o) => !o && setRosterFor(null)}>
         <DialogContent className="rounded-2xl max-w-sm max-h-[80vh] overflow-y-auto">
-          <DialogHeader><DialogTitle>{rosterFor?.title}</DialogTitle></DialogHeader>
+          <DialogHeader>
+            <div className="flex items-center justify-between gap-2">
+              <DialogTitle className="truncate">{rosterFor?.title}</DialogTitle>
+              {isAdmin && rosterFor && rosterForSession(rosterFor.id).length > 0 && (
+                <Button size="sm" variant="outline" onClick={() => exportRosterCsv(rosterFor)} className="rounded-full h-8 px-3 text-xs flex-shrink-0">
+                  <Download className="w-3 h-3 mr-1" />CSV
+                </Button>
+              )}
+            </div>
+          </DialogHeader>
           <div className="space-y-2">
             {rosterFor && rosterForSession(rosterFor.id).length === 0 && (
               <p className="text-sm text-muted-foreground text-center py-6">Nobody marked yet</p>
