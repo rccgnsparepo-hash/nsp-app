@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
-import { Calendar as CalendarIcon, Plus, Check, X, Users, Clock, MapPin } from 'lucide-react';
+import { Calendar as CalendarIcon, Plus, Check, X, Users, Clock, MapPin, Download } from 'lucide-react';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { Button } from '@/components/ui/button';
