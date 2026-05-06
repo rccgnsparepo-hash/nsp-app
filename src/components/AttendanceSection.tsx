@@ -146,6 +146,35 @@ const AttendanceSection = () => {
   const rosterForSession = (sessionId: string) =>
     (records ?? []).filter((r: any) => r.session_id === sessionId);
 
+  const exportRosterCsv = (session: any) => {
+    const roster = rosterForSession(session.id);
+    const escape = (v: any) => {
+      const s = v == null ? '' : String(v);
+      return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+    };
+    const headers = ['Name', 'Email', 'Status', 'Marked At', 'Reviewed At'];
+    const rows = roster.map((r: any) => {
+      const p: any = profMap.get(r.user_id);
+      return [
+        p?.full_name || 'Unknown',
+        p?.email || '',
+        r.status,
+        new Date(r.marked_at).toISOString(),
+        r.reviewed_at ? new Date(r.reviewed_at).toISOString() : '',
+      ].map(escape).join(',');
+    });
+    const csv = [headers.join(','), ...rows].join('\n');
+    const safe = session.title.replace(/[^a-z0-9-_]+/gi, '_');
+    const filename = `attendance_${safe}_${session.session_date}.csv`;
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = filename;
+    document.body.appendChild(a); a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    toast.success('CSV exported');
+  };
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between">
