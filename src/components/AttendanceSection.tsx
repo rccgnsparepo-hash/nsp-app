@@ -234,6 +234,47 @@ const AttendanceSection = () => {
         )}
       </div>
 
+      {isAdmin && (sessions ?? []).length > 0 && (
+        <div className="neumorphic-sm rounded-2xl p-3 bg-card space-y-2">
+          <div className="flex items-center gap-2">
+            <Download className="w-3.5 h-3.5 text-primary" />
+            <p className="text-xs font-semibold text-foreground">Export attendance CSV</p>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <Select value={exportSessionId} onValueChange={setExportSessionId}>
+              <SelectTrigger className="h-9 bg-muted border-0 text-xs"><SelectValue placeholder="Select session" /></SelectTrigger>
+              <SelectContent>
+                {(sessions ?? []).map((s: any) => (
+                  <SelectItem key={s.id} value={s.id} className="text-xs">
+                    {s.title} · {format(new Date(s.session_date), 'MMM d')}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select value={exportStatus} onValueChange={(v: any) => setExportStatus(v)}>
+              <SelectTrigger className="h-9 bg-muted border-0 text-xs"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all" className="text-xs">All statuses</SelectItem>
+                <SelectItem value="approved" className="text-xs">Approved only</SelectItem>
+                <SelectItem value="pending" className="text-xs">Pending only</SelectItem>
+                <SelectItem value="rejected" className="text-xs">Rejected only</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <Button
+            size="sm"
+            disabled={!exportSessionId}
+            onClick={() => {
+              const s = (sessions ?? []).find((x: any) => x.id === exportSessionId);
+              if (s) exportRosterCsv(s, exportStatus);
+            }}
+            className="w-full h-8 rounded-full bg-primary text-primary-foreground text-xs"
+          >
+            <Download className="w-3 h-3 mr-1" />Download CSV
+          </Button>
+        </div>
+      )}
+
       {(sessions ?? []).length === 0 && (
         <div className="neumorphic rounded-2xl p-6 bg-card text-center">
           <p className="text-sm text-muted-foreground">
