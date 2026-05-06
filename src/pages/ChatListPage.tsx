@@ -63,9 +63,9 @@ const ChatListPage = () => {
     setMessages(prev => before ? [...prev, ...rows] : rows);
   };
 
-  useEffect(() => { loadPage(); }, [user]);
+  useEffect(() => { loadPage(); refreshUnread(); }, [user]);
 
-  // Realtime: patch the local list instead of full reload
+  // Realtime: patch the local list and refresh unread on any change
   useEffect(() => {
     if (!user) return;
     const ch = supabase
@@ -74,15 +74,24 @@ const ChatListPage = () => {
         const m: any = payload.new;
         if (m.sender_id !== user.id && m.recipient_id !== user.id) return;
         setMessages(prev => prev.find(x => x.id === m.id) ? prev : [m, ...prev]);
+        if (m.recipient_id === user.id && !m.read) {
+          setUnreadByUser(prev => {
+            const next = new Map(prev);
+            next.set(m.sender_id, (next.get(m.sender_id) || 0) + 1);
+            return next;
+          });
+        }
       })
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'direct_messages' }, (payload) => {
         const m: any = payload.new;
         if (m.sender_id !== user.id && m.recipient_id !== user.id) return;
         setMessages(prev => prev.map(x => x.id === m.id ? { ...x, ...m } : x));
+        if (m.recipient_id === user.id) refreshUnread();
       })
       .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'direct_messages' }, (payload) => {
         const id = (payload.old as any).id;
         setMessages(prev => prev.filter(x => x.id !== id));
+        refreshUnread();
       })
       .subscribe();
     return () => { supabase.removeChannel(ch); };
@@ -91,26 +100,26 @@ const ChatListPage = () => {
   const conversations = useMemo<Conversation[]>(() => {
     if (!user) return [];
     const map = new Map<string, Conversation>();
-    // messages already sorted desc; first one per partner is the most recent
     for (const m of messages) {
       const otherId = m.sender_id === user.id ? m.recipient_id : m.sender_id;
-      const existing = map.get(otherId);
-      if (!existing) {
-        map.set(otherId, {
-          otherId,
-          lastMessage: m.content,
-          lastAt: m.created_at,
-          lastFromMe: m.sender_id === user.id,
-          unread: (!m.read && m.recipient_id === user.id) ? 1 : 0,
-        });
-      } else if (!m.read && m.recipient_id === user.id) {
-        existing.unread += 1;
+      if (map.has(otherId)) continue;
+      map.set(otherId, {
+        otherId,
+        lastMessage: m.content,
+        lastAt: m.created_at,
+        lastFromMe: m.sender_id === user.id,
+        unread: unreadByUser.get(otherId) || 0,
+      });
+    }
+    for (const [otherId, count] of unreadByUser.entries()) {
+      if (!map.has(otherId) && count > 0) {
+        map.set(otherId, { otherId, lastMessage: '', lastAt: new Date(0).toISOString(), lastFromMe: false, unread: count });
       }
     }
     return Array.from(map.values()).sort((a, b) =>
       new Date(b.lastAt).getTime() - new Date(a.lastAt).getTime()
     );
-  }, [messages, user]);
+  }, [messages, user, unreadByUser]);
 
   const loadMore = async () => {
     if (loadingMore || !hasMore || messages.length === 0) return;
