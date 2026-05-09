@@ -16,7 +16,22 @@ const statusBadge = (status: string) => {
 const PushDiagnostics = () => {
   const [filter, setFilter] = useState('');
   const [running, setRunning] = useState(false);
+  const [runningZap, setRunningZap] = useState(false);
   const [e2e, setE2e] = useState<string>('');
+  const [zapResult, setZapResult] = useState<string>('');
+
+  const { data: zapStatus } = useQuery({
+    queryKey: ['zapier-status'],
+    queryFn: async () => {
+      try {
+        const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/dispatch-notification?status=1`;
+        const res = await fetch(url, {
+          headers: { apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string },
+        });
+        return await res.json();
+      } catch { return { zapier_configured: false }; }
+    },
+  });
 
   const { data: logs, refetch, isLoading } = useQuery({
     queryKey: ['dispatch-logs'],
