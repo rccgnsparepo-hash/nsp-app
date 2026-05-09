@@ -1,89 +1,87 @@
-# Push Notifications: Vercel Migration + Trigger Hardening
+## Goal
 
-## Diagnosis (verified, not assumed)
+Route all app-triggered notifications through a single Zapier webhook (which then calls OneSignal), while keeping the existing `send-notification` edge function as an automatic fallback if Zapier fails.
 
-I queried the database and edge function state. Here's what is actually happening:
-
-1. **Triggers ARE attached and firing.** `notifications` table has 166 rows in the last 24h. The 6 triggers from the previous migration (`posts_push_notify`, `messages_push_notify`, etc.) are working.
-2. **The edge function IS being called.** Recent `pg_net` HTTP responses to `send-notification` returned HTTP 200.
-3. **OneSignal is rejecting every send** with: `"All included players are not subscribed"`. This is the real root cause.
-4. **`user_push_subscriptions` has only 1 row** — meaning almost no browser/device has actually completed the OneSignal subscription handshake.
-
-So the problem is **not** missing triggers or missing backend wiring. It is that **OneSignal's App is configured for the wrong Site URL / origin**, so when users visit `nsp-main-app.vercel.app` the SDK either can't register the service worker under the right scope or registers a subscription that OneSignal then marks as not-subscribed for the App's allowed origin. That is why manual dashboard pushes work (they hit any subscribed device on any origin tied to the app) but server-side `include_external_user_ids` calls find nothing for the new domain.
-
-## What requires action OUTSIDE the codebase (you must do this in OneSignal)
-
-Code changes alone cannot fix the "players not subscribed" error. In the OneSignal dashboard for this app:
-
-1. **Settings → Web Configuration → Typical Site**
-   - Site URL: `https://nsp-main-app.vercel.app`
-   - Default icon URL: keep or update
-   - Disable "My site is not fully HTTPS"
-2. **Remove** any old `lovable.app` / `id-preview--*.lovable.app` entries from the Site URL list.
-3. Save and let OneSignal regenerate the SDK config. Existing subscriptions tied to the old origin will be invalidated — that's expected; users will re-subscribe on first visit to the Vercel domain.
-4. Confirm `ONESIGNAL_APP_ID` and `ONESIGNAL_REST_API_KEY` secrets in Lovable Cloud match this same app (they're already set).
-
-I'll call this out in the final response so you don't miss it.
-
-## Code/infra changes I will make
-
-### 1. Service worker scope + Vercel headers
-- Verify `public/OneSignalSDKWorker.js` exists (it does) and add `public/OneSignalSDKUpdaterWorker.js` (currently missing — referenced in init but not on disk).
-- Update `vercel.json` to:
-  - Serve `/OneSignalSDKWorker.js` and `/OneSignalSDKUpdaterWorker.js` with `Service-Worker-Allowed: /` and `Cache-Control: no-cache`.
-  - Keep SPA rewrite but EXCLUDE the worker files so they aren't rewritten to `index.html` (current rewrite catches `/(.*)` which breaks SW serving on Vercel).
-
-### 2. `src/lib/onesignal.ts` hardening
-- Stop hard-coding `notifyButton: { enable: true }` (it interferes on mobile). Make it opt-in.
-- Persist player_id + external_id more aggressively: also upsert on `initOneSignal` completion, not only on the change event.
-- Add a `welcomeNotification: { disable: true }` and explicit `serviceWorkerParam: { scope: '/' }`.
-- Log the player_id, permission state, and external_id to console under a `[OneSignal]` prefix so the debug panel and console show what's happening.
-
-### 3. Centralized notification utility (DB side)
-- Add `public.notify_users(_user_ids uuid[], _title, _body, _data)` and refactor `invoke_push_to_user` / `invoke_push_broadcast` to delegate to it. This is the single choke point for inbox-insert + OneSignal dispatch with consistent logging via `RAISE NOTICE`.
-- Add `public.notify_followers_of(_actor_id uuid, ...)` stub for future use (no follower table exists today, so it broadcasts excluding actor — keeps the API ready).
-
-### 4. Re-attach triggers idempotently in a fresh migration
-The current triggers exist but `pg_trigger` lookups via the read tool returned empty (likely view permission), so I'll re-issue `CREATE TRIGGER IF NOT EXISTS`-style DDL to be safe, plus add the missing ones:
-- `post_likes` INSERT → notify post owner ("X liked your post")
-- `post_comments` INSERT → notify post owner + parent comment author
-- `prayer_interactions` INSERT → notify prayer author ("X is praying with you")
-- Keep existing: posts, prayer_requests, direct_messages, attendance_sessions, attendance_records (insert + update).
-
-### 5. `send-notification` edge function
-- Restrict CORS `Access-Control-Allow-Origin` to `https://nsp-main-app.vercel.app` (with fallback to `*` only in non-prod via `ALLOWED_ORIGIN` env var, default to vercel domain).
-- Better error surfacing: when OneSignal returns `errors: ["All included players are not subscribed"]`, return HTTP 200 with `{ ok: false, reason: "no_subscribers" }` and log clearly so triggers don't look like silent failures.
-- Add `console.log` for every dispatch including target type and external_user_ids count.
-
-### 6. Cleanup of `lovable.app` references
-- Search & remove any `lovable.app` strings from `index.html`, `vite.config.ts`, manifest, SW files. (Current scan: only social-image OG URLs reference Google Cloud Storage, no lovable.app domain in shipped code — I'll re-verify and strip if found.)
-
-## Files to add/edit
+## Architecture
 
 ```text
-supabase/migrations/<new>.sql        new — central notify utility + likes/comments/prayer-interaction triggers, re-assert existing triggers
-supabase/functions/send-notification/index.ts   edit — origin restriction, better error reporting, logs
-src/lib/onesignal.ts                  edit — scope, logging, eager upsert, no welcome notif
-public/OneSignalSDKUpdaterWorker.js  new — importScripts updater SW
-vercel.json                           edit — SW headers + exclude workers from SPA rewrite
-src/components/PushDebugPanel.tsx    edit — show "OneSignal site URL" hint + last upsert timestamp
+DB trigger (post/like/message/etc.)
+        │
+        ▼
+public.invoke_push_to_user / invoke_push_broadcast / notify_users
+        │  (still inserts inbox row)
+        ▼
+edge fn: dispatch-notification  ← NEW single choke point
+        │
+        ├── 1. POST → Zapier webhook (ZAPIER_WEBHOOK_URL)
+        │         payload: { type, title, body, userIds[], data, broadcast }
+        │
+        └── 2. If Zapier returns non-2xx OR secret missing
+              → fall back to existing send-notification (OneSignal direct)
+        │
+        ▼
+   notification_dispatch_logs (channel = 'zapier' | 'onesignal_fallback')
 ```
 
-No changes to `client.ts`, `types.ts`, or `config.toml`.
+The Zap on Zapier's side: Webhook (Catch Hook) → OneSignal "Send Push" action mapped from payload fields.
 
-## How we'll verify it works
+## Changes
 
-1. Deploy, visit `https://nsp-main-app.vercel.app` in a clean browser, accept push prompt.
-2. Confirm `user_push_subscriptions` row appears for your user (I'll query it).
-3. Confirm OneSignal dashboard → Audience shows your user with a subscribed Web record on the vercel.app origin.
-4. Have a second user (or you on a second device) post / message. Check:
-   - `notifications` row inserted (inbox)
-   - `net._http_response` for `send-notification` returns `ok: true` AND `oneSignal.recipients > 0` (no longer "not subscribed")
-   - Native push lands on the device
-5. If step 4 still shows "not subscribed", the OneSignal dashboard Site URL was not updated — see "OUTSIDE the codebase" section above.
+### 1. Secret
+- Add `ZAPIER_WEBHOOK_URL` via the secrets tool (user pastes their Catch Hook URL).
 
-## Things I will NOT do
+### 2. New edge function `dispatch-notification`
+- Public (verify_jwt = false) — only callable from inside DB via service role calls (same model as send-notification).
+- Accepts the same payload shape as send-notification: `{ broadcast?, userIds?, title, message, data?, url? }`.
+- Builds a normalized Zapier payload:
+  ```json
+  {
+    "type": "post_like",
+    "title": "...",
+    "body": "...",
+    "broadcast": false,
+    "userIds": ["uuid", "..."],
+    "data": { ... },
+    "source": "nsp-main-app"
+  }
+  ```
+- POSTs to `ZAPIER_WEBHOOK_URL`. On non-2xx, missing secret, or thrown error → invokes `send-notification` as fallback.
+- Logs every attempt to `notification_dispatch_logs` with a new `channel` column (`zapier` / `onesignal_fallback`).
 
-- Will not enable anonymous sign-ups, change auth, or touch unrelated features.
-- Will not store secrets in code; the App ID continues to come from `get-onesignal-config` edge function.
-- Will not remove the inbox/in-app notification system — it stays as the source of truth even when OneSignal can't deliver.
+### 3. Migration
+- `ALTER TABLE notification_dispatch_logs ADD COLUMN channel text DEFAULT 'onesignal'`.
+- Update DB functions `invoke_push_to_user`, `invoke_push_broadcast`, `notify_users` to call `/functions/v1/dispatch-notification` instead of `/send-notification`. Inbox insert behavior unchanged.
+
+### 4. Admin diagnostics UI (`PushDiagnostics.tsx`)
+- Add a `channel` column to the table.
+- Add a "Test Zapier pipeline" button that calls `dispatch-notification` with a broadcast test payload.
+- Show a banner if `ZAPIER_WEBHOOK_URL` is unset (detect via a small status endpoint on the new function: `GET ?status=1` returns `{ zapier_configured: bool }`).
+
+### 5. Keep
+- `send-notification` stays exactly as-is (used as fallback + still callable manually).
+- All existing triggers stay attached; only the URL inside the helper functions changes.
+- Inbox / `notifications` table behavior unchanged.
+
+## Zap setup the user must do (outside code)
+
+1. Create a Zap → trigger: **Webhooks by Zapier → Catch Hook**. Copy the URL.
+2. Add action: **OneSignal → Send a Push Notification**.
+3. Map fields:
+   - Heading → `title`
+   - Content → `body`
+   - If `broadcast` is `true` → use Segment "Subscribed Users"
+   - Else → External User IDs = `userIds`
+   - Additional Data → `data`
+4. Turn the Zap on. Paste the webhook URL when Lovable prompts for `ZAPIER_WEBHOOK_URL`.
+
+## Verification
+
+1. After secret is set, hit "Test Zapier pipeline" in Admin → Push tab. Expect dispatch log row with `channel='zapier'`, `status='sent'`.
+2. Check Zap history → 1 successful run; OneSignal step shows recipients > 0 (assuming subscribed devices).
+3. Trigger a real action (post a like, send a message). Confirm matching dispatch log row + push lands on device.
+4. Temporarily break the webhook URL (rotate secret to invalid) → confirm fallback row with `channel='onesignal_fallback'` and push still attempts via OneSignal.
+
+## Out of scope
+
+- Re-subscribing users on `nsp-main-app.vercel.app` (still required for push to reach 0+ recipients — orthogonal to Zapier wiring).
+- Changing the inbox UI or other features.
