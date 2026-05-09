@@ -244,6 +244,7 @@ const PushDiagnostics = () => {
                 <p className="text-[11px] text-muted-foreground line-clamp-2">{l.body}</p>
                 <div className="flex flex-wrap gap-2 text-[10px] text-muted-foreground">
                   <span className="bg-muted px-1.5 py-0.5 rounded">target: {l.target_type}</span>
+                  {l.channel && <span className={`px-1.5 py-0.5 rounded ${l.channel === 'zapier' ? 'bg-primary/15 text-primary' : 'bg-muted'}`}>via: {l.channel}</span>}
                   <span className="bg-muted px-1.5 py-0.5 rounded">recipients: {l.recipients ?? 0}</span>
                   {l.onesignal_id && <span className="bg-muted px-1.5 py-0.5 rounded truncate max-w-[200px]">id: {l.onesignal_id}</span>}
                 </div>
