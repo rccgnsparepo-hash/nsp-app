@@ -202,6 +202,7 @@ export type Database = {
       notification_dispatch_logs: {
         Row: {
           body: string | null
+          channel: string | null
           created_at: string
           error: string | null
           id: string
@@ -217,6 +218,7 @@ export type Database = {
         }
         Insert: {
           body?: string | null
+          channel?: string | null
           created_at?: string
           error?: string | null
           id?: string
@@ -232,6 +234,7 @@ export type Database = {
         }
         Update: {
           body?: string | null
+          channel?: string | null
           created_at?: string
           error?: string | null
           id?: string
