@@ -103,9 +103,14 @@ const ChatListPage = () => {
     for (const m of messages) {
       const otherId = m.sender_id === user.id ? m.recipient_id : m.sender_id;
       if (map.has(otherId)) continue;
+      const mt = (m as any).media_type;
+      let preview = m.content;
+      if (mt === 'image') preview = '📷 Photo';
+      else if (mt === 'video') preview = '🎥 Video';
+      else if (mt === 'file') preview = `📎 ${(m as any).media_name || 'File'}`;
       map.set(otherId, {
         otherId,
-        lastMessage: m.content,
+        lastMessage: preview,
         lastAt: m.created_at,
         lastFromMe: m.sender_id === user.id,
         unread: unreadByUser.get(otherId) || 0,
