@@ -29,9 +29,43 @@ const PushDiagnostics = () => {
           headers: { apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string },
         });
         return await res.json();
-      } catch { return { zapier_configured: false }; }
+      } catch { return {}; }
     },
   });
+
+  const channels = [
+    { key: 'chat_configured', label: 'Chat (DMs + calls)', secret: 'ZAPIER_WEBHOOK_CHAT', testData: { type: 'message' } },
+    { key: 'gallery_post_configured', label: 'Gallery posts (image/video)', secret: 'ZAPIER_WEBHOOK_GALLERY_POST', testData: { type: 'post', post_type: 'image' } },
+    { key: 'voice_note_configured', label: 'Voice notes', secret: 'ZAPIER_WEBHOOK_VOICE_NOTE', testData: { type: 'post', post_type: 'voice' } },
+    { key: 'youtube_post_configured', label: 'YouTube posts', secret: 'ZAPIER_WEBHOOK_YOUTUBE_POST', testData: { type: 'post', post_type: 'youtube' } },
+    { key: 'prayer_configured', label: 'Prayer', secret: 'ZAPIER_WEBHOOK_PRAYER', testData: { type: 'prayer' } },
+    { key: 'attendance_configured', label: 'Attendance', secret: 'ZAPIER_WEBHOOK_ATTENDANCE', testData: { type: 'attendance_session' } },
+  ] as const;
+
+  const testChannel = async (label: string, testData: any) => {
+    setRunningZap(true);
+    setZapResult('');
+    try {
+      const { data, error } = await supabase.functions.invoke('dispatch-notification', {
+        body: {
+          broadcast: !testData.type?.startsWith('message'),
+          userIds: testData.type === 'message' ? [(await supabase.auth.getUser()).data.user?.id].filter(Boolean) : undefined,
+          title: `🧪 ${label} test`,
+          message: `Channel test at ${new Date().toLocaleTimeString()}`,
+          data: testData,
+        },
+      });
+      if (error) throw error;
+      setZapResult(`${data?.ok ? '✅' : '⚠️'} ${label} → channel=${data?.channel} status=${data?.status ?? '-'}`);
+      toast[data?.ok ? 'success' : 'warning'](`${label}: ${data?.channel}`);
+      await refetch();
+    } catch (e: any) {
+      setZapResult(`❌ ${label}: ${e.message}`);
+      toast.error(e.message);
+    } finally {
+      setRunningZap(false);
+    }
+  };
 
   const { data: logs, refetch, isLoading } = useQuery({
     queryKey: ['dispatch-logs'],
