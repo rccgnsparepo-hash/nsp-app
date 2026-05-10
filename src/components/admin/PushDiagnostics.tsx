@@ -29,9 +29,43 @@ const PushDiagnostics = () => {
           headers: { apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string },
         });
         return await res.json();
-      } catch { return { zapier_configured: false }; }
+      } catch { return {}; }
     },
   });
+
+  const channels = [
+    { key: 'chat_configured', label: 'Chat (DMs + calls)', secret: 'ZAPIER_WEBHOOK_CHAT', testData: { type: 'message' } },
+    { key: 'gallery_post_configured', label: 'Gallery posts (image/video)', secret: 'ZAPIER_WEBHOOK_GALLERY_POST', testData: { type: 'post', post_type: 'image' } },
+    { key: 'voice_note_configured', label: 'Voice notes', secret: 'ZAPIER_WEBHOOK_VOICE_NOTE', testData: { type: 'post', post_type: 'voice' } },
+    { key: 'youtube_post_configured', label: 'YouTube posts', secret: 'ZAPIER_WEBHOOK_YOUTUBE_POST', testData: { type: 'post', post_type: 'youtube' } },
+    { key: 'prayer_configured', label: 'Prayer', secret: 'ZAPIER_WEBHOOK_PRAYER', testData: { type: 'prayer' } },
+    { key: 'attendance_configured', label: 'Attendance', secret: 'ZAPIER_WEBHOOK_ATTENDANCE', testData: { type: 'attendance_session' } },
+  ] as const;
+
+  const testChannel = async (label: string, testData: any) => {
+    setRunningZap(true);
+    setZapResult('');
+    try {
+      const { data, error } = await supabase.functions.invoke('dispatch-notification', {
+        body: {
+          broadcast: !testData.type?.startsWith('message'),
+          userIds: testData.type === 'message' ? [(await supabase.auth.getUser()).data.user?.id].filter(Boolean) : undefined,
+          title: `🧪 ${label} test`,
+          message: `Channel test at ${new Date().toLocaleTimeString()}`,
+          data: testData,
+        },
+      });
+      if (error) throw error;
+      setZapResult(`${data?.ok ? '✅' : '⚠️'} ${label} → channel=${data?.channel} status=${data?.status ?? '-'}`);
+      toast[data?.ok ? 'success' : 'warning'](`${label}: ${data?.channel}`);
+      await refetch();
+    } catch (e: any) {
+      setZapResult(`❌ ${label}: ${e.message}`);
+      toast.error(e.message);
+    } finally {
+      setRunningZap(false);
+    }
+  };
 
   const { data: logs, refetch, isLoading } = useQuery({
     queryKey: ['dispatch-logs'],
@@ -129,57 +163,50 @@ const PushDiagnostics = () => {
     return m;
   }, [subs]);
 
-  const runZapierTest = async () => {
-    setRunningZap(true);
-    setZapResult('');
-    try {
-      const stamp = new Date().toISOString();
-      const { data, error } = await supabase.functions.invoke('dispatch-notification', {
-        body: {
-          broadcast: true,
-          title: '🧪 Zapier pipeline test',
-          message: `Zap → OneSignal verification at ${stamp}`,
-          data: { type: 'zapier_test', stamp },
-        },
-      });
-      if (error) throw error;
-      if (data?.ok && data?.channel === 'zapier') {
-        setZapResult(`✅ Zapier accepted the webhook (HTTP ${data.status}). Check your Zap history → OneSignal step.`);
-        toast.success('Zapier webhook delivered');
-      } else if (data?.channel === 'onesignal_fallback') {
-        setZapResult(`⚠️ Zapier failed — fell back to direct OneSignal. ${JSON.stringify(data.data ?? {}).slice(0, 200)}`);
-        toast.warning('Used OneSignal fallback');
-      } else {
-        setZapResult(`❌ Unexpected: ${JSON.stringify(data)}`);
-      }
-      await refetch();
-    } catch (e: any) {
-      setZapResult(`❌ Invoke failed: ${e.message}`);
-      toast.error(e.message);
-    } finally {
-      setRunningZap(false);
-    }
-  };
 
   return (
     <div className="space-y-4">
-      {zapStatus && !zapStatus.zapier_configured && (
-        <div className="rounded-2xl p-3 bg-amber-500/10 border border-amber-500/30 text-xs text-amber-700 dark:text-amber-300">
-          ⚠️ <strong>ZAPIER_WEBHOOK_URL is not configured.</strong> All pushes are using the OneSignal fallback path.
+      <div className="neumorphic rounded-2xl p-4 bg-card space-y-3">
+        <h3 className="font-semibold text-foreground text-sm">Zapier channels (6)</h3>
+        <p className="text-[11px] text-muted-foreground -mt-1">
+          Each row routes to its own Zap. Configure missing URLs in Lovable Cloud → Secrets.
+        </p>
+        <div className="space-y-1.5">
+          {channels.map((c) => {
+            const ok = !!zapStatus?.[c.key];
+            return (
+              <div key={c.secret} className="flex items-center gap-2 text-xs">
+                <span className={`inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${ok ? 'text-green-600 bg-green-500/10' : 'text-amber-600 bg-amber-500/10'}`}>
+                  {ok ? <CheckCircle2 className="w-3 h-3" /> : <AlertTriangle className="w-3 h-3" />}
+                  {ok ? 'set' : 'missing'}
+                </span>
+                <div className="flex-1 min-w-0">
+                  <p className="font-medium text-foreground truncate">{c.label}</p>
+                  <p className="text-[10px] text-muted-foreground font-mono truncate">{c.secret}</p>
+                </div>
+                <Button size="sm" variant="outline" className="h-7 text-[10px] px-2" disabled={!ok || runningZap} onClick={() => testChannel(c.label, c.testData)}>
+                  Test
+                </Button>
+              </div>
+            );
+          })}
         </div>
-      )}
+        {zapResult && <pre className="text-[11px] bg-muted rounded p-2 whitespace-pre-wrap break-words">{zapResult}</pre>}
+      </div>
 
       <div className="neumorphic rounded-2xl p-4 bg-card space-y-3">
         <div className="flex items-center justify-between">
-          <h3 className="font-semibold text-foreground">Zapier pipeline test</h3>
-          <Button size="sm" onClick={runZapierTest} disabled={runningZap}>
-            <Send className="w-3.5 h-3.5 mr-1" />{runningZap ? 'Running…' : 'Test Zapier'}
+          <h3 className="font-semibold text-foreground">Direct OneSignal test (fallback)</h3>
+          <Button size="sm" variant="outline" onClick={runE2E} disabled={running}>
+            <Send className="w-3.5 h-3.5 mr-1" />{running ? 'Running…' : 'Run direct'}
           </Button>
         </div>
         <p className="text-xs text-muted-foreground">
-          Sends a broadcast through dispatch-notification → Zapier → OneSignal.
+          Bypasses Zapier and calls OneSignal directly via send-notification.
         </p>
-        {zapResult && <pre className="text-[11px] bg-muted rounded p-2 whitespace-pre-wrap break-words">{zapResult}</pre>}
+        {e2e && (
+          <pre className="text-[11px] bg-muted rounded p-2 whitespace-pre-wrap break-words">{e2e}</pre>
+        )}
       </div>
 
       <div className="neumorphic rounded-2xl p-4 bg-card space-y-3">

@@ -88,27 +88,110 @@ export type Database = {
         }
         Relationships: []
       }
+      call_sessions: {
+        Row: {
+          callee_id: string
+          caller_id: string
+          created_at: string
+          duration_sec: number | null
+          ended_at: string | null
+          id: string
+          kind: string
+          started_at: string | null
+          status: string
+        }
+        Insert: {
+          callee_id: string
+          caller_id: string
+          created_at?: string
+          duration_sec?: number | null
+          ended_at?: string | null
+          id?: string
+          kind: string
+          started_at?: string | null
+          status?: string
+        }
+        Update: {
+          callee_id?: string
+          caller_id?: string
+          created_at?: string
+          duration_sec?: number | null
+          ended_at?: string | null
+          id?: string
+          kind?: string
+          started_at?: string | null
+          status?: string
+        }
+        Relationships: []
+      }
+      call_signals: {
+        Row: {
+          created_at: string
+          from_user: string
+          id: string
+          payload: Json
+          session_id: string
+        }
+        Insert: {
+          created_at?: string
+          from_user: string
+          id?: string
+          payload: Json
+          session_id: string
+        }
+        Update: {
+          created_at?: string
+          from_user?: string
+          id?: string
+          payload?: Json
+          session_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "call_signals_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "call_sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       direct_messages: {
         Row: {
-          content: string
+          content: string | null
           created_at: string
           id: string
+          media_mime: string | null
+          media_name: string | null
+          media_size: number | null
+          media_type: string | null
+          media_url: string | null
           read: boolean
           recipient_id: string
           sender_id: string
         }
         Insert: {
-          content: string
+          content?: string | null
           created_at?: string
           id?: string
+          media_mime?: string | null
+          media_name?: string | null
+          media_size?: number | null
+          media_type?: string | null
+          media_url?: string | null
           read?: boolean
           recipient_id: string
           sender_id: string
         }
         Update: {
-          content?: string
+          content?: string | null
           created_at?: string
           id?: string
+          media_mime?: string | null
+          media_name?: string | null
+          media_size?: number | null
+          media_type?: string | null
+          media_url?: string | null
           read?: boolean
           recipient_id?: string
           sender_id?: string
