@@ -163,37 +163,6 @@ const PushDiagnostics = () => {
     return m;
   }, [subs]);
 
-  const runZapierTest = async () => {
-    setRunningZap(true);
-    setZapResult('');
-    try {
-      const stamp = new Date().toISOString();
-      const { data, error } = await supabase.functions.invoke('dispatch-notification', {
-        body: {
-          broadcast: true,
-          title: '🧪 Zapier pipeline test',
-          message: `Zap → OneSignal verification at ${stamp}`,
-          data: { type: 'zapier_test', stamp },
-        },
-      });
-      if (error) throw error;
-      if (data?.ok && data?.channel === 'zapier') {
-        setZapResult(`✅ Zapier accepted the webhook (HTTP ${data.status}). Check your Zap history → OneSignal step.`);
-        toast.success('Zapier webhook delivered');
-      } else if (data?.channel === 'onesignal_fallback') {
-        setZapResult(`⚠️ Zapier failed — fell back to direct OneSignal. ${JSON.stringify(data.data ?? {}).slice(0, 200)}`);
-        toast.warning('Used OneSignal fallback');
-      } else {
-        setZapResult(`❌ Unexpected: ${JSON.stringify(data)}`);
-      }
-      await refetch();
-    } catch (e: any) {
-      setZapResult(`❌ Invoke failed: ${e.message}`);
-      toast.error(e.message);
-    } finally {
-      setRunningZap(false);
-    }
-  };
 
   return (
     <div className="space-y-4">
