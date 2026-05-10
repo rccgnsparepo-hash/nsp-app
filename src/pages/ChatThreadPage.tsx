@@ -8,7 +8,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { format } from 'date-fns';
-import { uploadChatMedia, formatBytes, detectKind, CHAT_MEDIA_LIMITS } from '@/lib/chatMedia';
+import { uploadChatMedia, formatBytes, CHAT_MEDIA_LIMITS } from '@/lib/chatMedia';
 
 interface Msg {
   id: string;
