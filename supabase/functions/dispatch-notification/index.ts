@@ -1,6 +1,6 @@
 // Edge function: dispatch-notification
 // Single choke point for app-triggered pushes.
-// Routes to Zapier webhook (which calls OneSignal). Falls back to direct send-notification on failure.
+// Routes to one of 6 Zapier webhooks based on payload type. Falls back to direct send-notification on failure.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 
@@ -25,6 +25,45 @@ const SERVICE_ROLE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const admin = createClient(SUPABASE_URL, SERVICE_ROLE, {
   auth: { persistSession: false, autoRefreshToken: false },
 });
+
+type ChannelKey =
+  | "chat"
+  | "gallery_post"
+  | "voice_note"
+  | "youtube_post"
+  | "prayer"
+  | "attendance"
+  | "fallback";
+
+function pickChannel(data: Record<string, unknown> | undefined): ChannelKey {
+  const type = String(data?.type ?? "general");
+  const postType = String(data?.post_type ?? "");
+
+  if (type === "message" || type === "call") return "chat";
+  if (type === "prayer" || type === "prayer_interaction") return "prayer";
+  if (type === "attendance_session" || type === "attendance_review" || type === "attendance_pending")
+    return "attendance";
+  if (type === "post") {
+    if (postType === "voice") return "voice_note";
+    if (postType === "youtube") return "youtube_post";
+    return "gallery_post"; // image | video | default
+  }
+  return "fallback";
+}
+
+function getWebhookForChannel(ch: ChannelKey): string | null {
+  const map: Record<ChannelKey, string | undefined> = {
+    chat: Deno.env.get("ZAPIER_WEBHOOK_CHAT"),
+    gallery_post: Deno.env.get("ZAPIER_WEBHOOK_GALLERY_POST"),
+    voice_note: Deno.env.get("ZAPIER_WEBHOOK_VOICE_NOTE"),
+    youtube_post: Deno.env.get("ZAPIER_WEBHOOK_YOUTUBE_POST"),
+    prayer: Deno.env.get("ZAPIER_WEBHOOK_PRAYER"),
+    attendance: Deno.env.get("ZAPIER_WEBHOOK_ATTENDANCE"),
+    // fallback: try CHAT as a generic personal channel, otherwise none
+    fallback: Deno.env.get("ZAPIER_WEBHOOK_CHAT"),
+  };
+  return map[ch] ?? null;
+}
 
 async function logDispatch(row: Record<string, unknown>) {
   try {
@@ -56,13 +95,18 @@ async function callFallback(body: Payload): Promise<Response> {
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
-  const ZAPIER_WEBHOOK_URL = Deno.env.get("ZAPIER_WEBHOOK_URL");
-
-  // Status probe for the admin UI
+  // Status probe
   const url = new URL(req.url);
   if (req.method === "GET" && url.searchParams.get("status") === "1") {
     return new Response(
-      JSON.stringify({ zapier_configured: !!ZAPIER_WEBHOOK_URL }),
+      JSON.stringify({
+        chat_configured: !!Deno.env.get("ZAPIER_WEBHOOK_CHAT"),
+        gallery_post_configured: !!Deno.env.get("ZAPIER_WEBHOOK_GALLERY_POST"),
+        voice_note_configured: !!Deno.env.get("ZAPIER_WEBHOOK_VOICE_NOTE"),
+        youtube_post_configured: !!Deno.env.get("ZAPIER_WEBHOOK_YOUTUBE_POST"),
+        prayer_configured: !!Deno.env.get("ZAPIER_WEBHOOK_PRAYER"),
+        attendance_configured: !!Deno.env.get("ZAPIER_WEBHOOK_ATTENDANCE"),
+      }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
   }
@@ -77,6 +121,9 @@ Deno.serve(async (req) => {
       );
     }
 
+    const channel = pickChannel(body.data);
+    const webhook = getWebhookForChannel(channel);
+
     const target_type = body.broadcast
       ? "broadcast"
       : body.userIds?.length ? "external_user_ids"
@@ -86,12 +133,12 @@ Deno.serve(async (req) => {
     const user_ids = body.userIds ?? null;
     const type = (body.data as any)?.type ?? "general";
 
-    if (!ZAPIER_WEBHOOK_URL) {
-      console.warn("[dispatch-notification] no ZAPIER_WEBHOOK_URL set, using fallback");
+    if (!webhook) {
+      console.warn(`[dispatch-notification] no webhook for channel=${channel}, falling back`);
       await logDispatch({
         title: body.title, body: body.message, target_type, target_value, user_ids,
-        status: "skipped", channel: "zapier",
-        error: "ZAPIER_WEBHOOK_URL not configured",
+        status: "skipped", channel,
+        error: `No webhook configured for channel ${channel}`,
         request_payload: body as unknown as Record<string, unknown>,
       });
       return await callFallback(body);
@@ -99,6 +146,7 @@ Deno.serve(async (req) => {
 
     const zapPayload = {
       type,
+      channel,
       title: body.title,
       body: body.message,
       broadcast: !!body.broadcast,
@@ -110,12 +158,12 @@ Deno.serve(async (req) => {
       sent_at: new Date().toISOString(),
     };
 
-    console.log("[dispatch-notification] → Zapier", { type, target_type });
+    console.log(`[dispatch-notification] → Zapier channel=${channel} type=${type} target=${target_type}`);
 
     let zapStatus = 0;
     let zapText = "";
     try {
-      const res = await fetch(ZAPIER_WEBHOOK_URL, {
+      const res = await fetch(webhook, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(zapPayload),
@@ -126,18 +174,18 @@ Deno.serve(async (req) => {
       if (res.ok) {
         await logDispatch({
           title: body.title, body: body.message, target_type, target_value, user_ids,
-          status: "sent", channel: "zapier",
+          status: "sent", channel,
           recipients: body.broadcast ? null : (user_ids?.length ?? 0),
           raw_response: { status: zapStatus, body: zapText.slice(0, 500) },
           request_payload: zapPayload as unknown as Record<string, unknown>,
         });
         return new Response(
-          JSON.stringify({ ok: true, channel: "zapier", status: zapStatus }),
+          JSON.stringify({ ok: true, channel, status: zapStatus }),
           { headers: { ...corsHeaders, "Content-Type": "application/json" } },
         );
       }
 
-      console.warn("[dispatch-notification] Zapier non-2xx", zapStatus, zapText);
+      console.warn(`[dispatch-notification] Zapier non-2xx channel=${channel}`, zapStatus, zapText);
     } catch (e) {
       console.error("[dispatch-notification] Zapier threw", e);
       zapText = (e as Error).message;
@@ -146,7 +194,7 @@ Deno.serve(async (req) => {
     // Fall back
     await logDispatch({
       title: body.title, body: body.message, target_type, target_value, user_ids,
-      status: "zapier_failed", channel: "zapier",
+      status: "zapier_failed", channel,
       error: `Zapier HTTP ${zapStatus}: ${zapText.slice(0, 300)}`,
       request_payload: zapPayload as unknown as Record<string, unknown>,
     });
@@ -155,7 +203,7 @@ Deno.serve(async (req) => {
     console.error("[dispatch-notification] exception", e);
     await logDispatch({
       title: body?.title ?? null, body: body?.message ?? null,
-      status: "exception", channel: "zapier",
+      status: "exception", channel: "unknown",
       error: (e as Error).message,
       request_payload: (body ?? {}) as unknown as Record<string, unknown>,
     });
