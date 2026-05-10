@@ -7,6 +7,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { NotificationsProvider } from "@/hooks/useRealtimeNotifications";
 import NotificationOverlay from "@/components/NotificationOverlay";
+import IncomingCallOverlay from "@/components/IncomingCallOverlay";
 import SplashScreen from "@/components/SplashScreen";
 import PushDebugPanel from "@/components/PushDebugPanel";
 import Auth from "./pages/Auth";
@@ -30,6 +31,7 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   return (
     <NotificationsProvider>
       <NotificationOverlay />
+      <IncomingCallOverlay />
       {children}
       {isAdmin && <PushDebugPanel />}
     </NotificationsProvider>
