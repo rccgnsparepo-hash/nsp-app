@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { MessageCircle, Plus, Search } from 'lucide-react';
+import { MessageCircle, Plus, Search, Newspaper } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
@@ -161,7 +161,17 @@ const ChatListPage = () => {
     <AppLayout>
       <AppHeader title="Messages" />
       <div className="p-4 space-y-2">
-        <div className="flex items-center justify-between mb-2">
+        <button onClick={() => navigate('/news')}
+          className="w-full neumorphic rounded-2xl bg-card p-3 flex items-center gap-3 text-left active:scale-[0.99] transition-transform">
+          <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
+            <Newspaper className="w-5 h-5 text-primary" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-semibold text-foreground">Trending in Faith</p>
+            <p className="text-[11px] text-muted-foreground">Daily news from Christian outlets · in-app reader</p>
+          </div>
+        </button>
+        <div className="flex items-center justify-between mb-2 pt-2">
           <p className="text-xs text-muted-foreground">{conversations.length} conversation{conversations.length !== 1 ? 's' : ''}</p>
           <Dialog open={newOpen} onOpenChange={setNewOpen}>
             <DialogTrigger asChild>
