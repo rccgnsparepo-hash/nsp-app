@@ -75,7 +75,13 @@ const ChatThreadPage = () => {
         const inThread = (m.sender_id === user.id && m.recipient_id === userId) ||
                           (m.sender_id === userId && m.recipient_id === user.id);
         if (!inThread) return;
-        setMessages(prev => prev.find(x => x.id === m.id) ? prev : [...prev, m]);
+        setMessages(prev => {
+          if (prev.find(x => x.id === m.id)) return prev;
+          // Replace any optimistic temp from this sender with same content within 30s
+          const tempIdx = prev.findIndex(x => x.id.startsWith('tmp-') && x.sender_id === m.sender_id && x.content === m.content);
+          if (tempIdx >= 0) { const next = [...prev]; next[tempIdx] = m; return next; }
+          return [...prev, m];
+        });
         if (m.recipient_id === user.id) {
           supabase.from('direct_messages').update({ read: true }).eq('id', m.id);
         }
@@ -124,15 +130,26 @@ const ChatThreadPage = () => {
 
   const send = async () => {
     if (!user || !userId || !text.trim()) return;
-    setSending(true);
     const content = text.trim();
+    const tempId = `tmp-${Date.now()}`;
+    // Optimistic insert
+    const optimistic: Msg = {
+      id: tempId, sender_id: user.id, recipient_id: userId,
+      content, created_at: new Date().toISOString(), read: false,
+    };
+    setMessages(prev => [...prev, optimistic]);
     setText('');
     broadcastTyping('stop_typing');
-    const { error } = await supabase.from('direct_messages').insert({
+    const { data, error } = await supabase.from('direct_messages').insert({
       sender_id: user.id, recipient_id: userId, content,
-    });
-    if (error) { toast.error(error.message); setText(content); }
-    setSending(false);
+    }).select().single();
+    if (error) {
+      setMessages(prev => prev.filter(m => m.id !== tempId));
+      toast.error(error.message); setText(content);
+      return;
+    }
+    // Replace temp with real row
+    setMessages(prev => prev.map(m => m.id === tempId ? (data as any) : m));
   };
 
   const sendMedia = async (file: File) => {
@@ -149,6 +166,22 @@ const ChatThreadPage = () => {
       toast.error(e.message || 'Upload failed');
     } finally {
       setUploading(false);
+    }
+  };
+
+  const downloadMedia = async (m: Msg) => {
+    if (!m.media_url) return;
+    try {
+      const res = await fetch(m.media_url);
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = m.media_name || `chat-${m.id}`;
+      document.body.appendChild(a); a.click(); a.remove();
+      URL.revokeObjectURL(url);
+    } catch {
+      window.open(m.media_url, '_blank');
     }
   };
 
