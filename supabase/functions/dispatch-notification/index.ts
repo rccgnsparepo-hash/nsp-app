@@ -1,6 +1,7 @@
 // Edge function: dispatch-notification
-// Single choke point for app-triggered pushes.
-// Routes to one of 6 Zapier webhooks based on payload type. Falls back to direct send-notification on failure.
+// Routes to one of 6 Zapier webhooks based on payload type.
+// Now forwards sender_name, sender_id, preview, thread_url, target_mode, voip as top-level
+// fields so Zapier mappings stay simple.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 
@@ -18,6 +19,11 @@ interface Payload {
   message: string;
   data?: Record<string, unknown>;
   url?: string;
+  // optional enriched fields from DB triggers
+  sender_id?: string | null;
+  sender_name?: string | null;
+  preview?: string | null;
+  target_mode?: "external_user_ids" | "broadcast" | string;
 }
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
@@ -27,26 +33,20 @@ const admin = createClient(SUPABASE_URL, SERVICE_ROLE, {
 });
 
 type ChannelKey =
-  | "chat"
-  | "gallery_post"
-  | "voice_note"
-  | "youtube_post"
-  | "prayer"
-  | "attendance"
-  | "fallback";
+  | "chat" | "gallery_post" | "voice_note" | "youtube_post"
+  | "prayer" | "attendance" | "fallback";
 
 function pickChannel(data: Record<string, unknown> | undefined): ChannelKey {
   const type = String(data?.type ?? "general");
   const postType = String(data?.post_type ?? "");
-
   if (type === "message" || type === "call") return "chat";
+  if (type === "post_like" || type === "post_comment") return "chat"; // user-targeted
   if (type === "prayer" || type === "prayer_interaction") return "prayer";
-  if (type === "attendance_session" || type === "attendance_review" || type === "attendance_pending")
-    return "attendance";
+  if (type === "attendance_session" || type === "attendance_review" || type === "attendance_pending") return "attendance";
   if (type === "post") {
     if (postType === "voice") return "voice_note";
     if (postType === "youtube") return "youtube_post";
-    return "gallery_post"; // image | video | default
+    return "gallery_post";
   }
   return "fallback";
 }
@@ -59,96 +59,83 @@ function getWebhookForChannel(ch: ChannelKey): string | null {
     youtube_post: Deno.env.get("ZAPIER_WEBHOOK_YOUTUBE_POST"),
     prayer: Deno.env.get("ZAPIER_WEBHOOK_PRAYER"),
     attendance: Deno.env.get("ZAPIER_WEBHOOK_ATTENDANCE"),
-    // fallback: try CHAT as a generic personal channel, otherwise none
     fallback: Deno.env.get("ZAPIER_WEBHOOK_CHAT"),
   };
   return map[ch] ?? null;
 }
 
 async function logDispatch(row: Record<string, unknown>) {
-  try {
-    const { error } = await admin.from("notification_dispatch_logs").insert(row);
-    if (error) console.error("[dispatch-notification] log insert error", error);
-  } catch (e) {
-    console.error("[dispatch-notification] log threw", e);
-  }
+  try { await admin.from("notification_dispatch_logs").insert(row); }
+  catch (e) { console.error("[dispatch] log threw", e); }
 }
 
 async function callFallback(body: Payload): Promise<Response> {
-  console.log("[dispatch-notification] falling back to send-notification");
   const res = await fetch(`${SUPABASE_URL}/functions/v1/send-notification`, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${SERVICE_ROLE}`,
-      apikey: SERVICE_ROLE,
-    },
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${SERVICE_ROLE}`, apikey: SERVICE_ROLE },
     body: JSON.stringify(body),
   });
   const data = await res.json().catch(() => ({}));
   return new Response(JSON.stringify({ ok: res.ok, channel: "onesignal_fallback", data }), {
-    status: 200,
-    headers: { ...corsHeaders, "Content-Type": "application/json" },
+    status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
 }
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
-  // Status probe
   const url = new URL(req.url);
   if (req.method === "GET" && url.searchParams.get("status") === "1") {
-    return new Response(
-      JSON.stringify({
-        chat_configured: !!Deno.env.get("ZAPIER_WEBHOOK_CHAT"),
-        gallery_post_configured: !!Deno.env.get("ZAPIER_WEBHOOK_GALLERY_POST"),
-        voice_note_configured: !!Deno.env.get("ZAPIER_WEBHOOK_VOICE_NOTE"),
-        youtube_post_configured: !!Deno.env.get("ZAPIER_WEBHOOK_YOUTUBE_POST"),
-        prayer_configured: !!Deno.env.get("ZAPIER_WEBHOOK_PRAYER"),
-        attendance_configured: !!Deno.env.get("ZAPIER_WEBHOOK_ATTENDANCE"),
-      }),
-      { headers: { ...corsHeaders, "Content-Type": "application/json" } },
-    );
+    return new Response(JSON.stringify({
+      chat_configured: !!Deno.env.get("ZAPIER_WEBHOOK_CHAT"),
+      gallery_post_configured: !!Deno.env.get("ZAPIER_WEBHOOK_GALLERY_POST"),
+      voice_note_configured: !!Deno.env.get("ZAPIER_WEBHOOK_VOICE_NOTE"),
+      youtube_post_configured: !!Deno.env.get("ZAPIER_WEBHOOK_YOUTUBE_POST"),
+      prayer_configured: !!Deno.env.get("ZAPIER_WEBHOOK_PRAYER"),
+      attendance_configured: !!Deno.env.get("ZAPIER_WEBHOOK_ATTENDANCE"),
+    }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
   }
 
   let body: Payload | null = null;
   try {
     body = (await req.json()) as Payload;
     if (!body?.title || !body?.message) {
-      return new Response(
-        JSON.stringify({ error: "title and message are required" }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-      );
+      return new Response(JSON.stringify({ error: "title and message are required" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
     const channel = pickChannel(body.data);
     const webhook = getWebhookForChannel(channel);
 
-    const target_type = body.broadcast
-      ? "broadcast"
+    const target_type = body.broadcast ? "broadcast"
       : body.userIds?.length ? "external_user_ids"
-      : body.playerIds?.length ? "player_ids"
-      : "none";
+      : body.playerIds?.length ? "player_ids" : "none";
     const target_value = body.broadcast ? ["Subscribed Users"] : body.userIds ?? body.playerIds ?? null;
     const user_ids = body.userIds ?? null;
     const type = (body.data as any)?.type ?? "general";
 
     if (!webhook) {
-      console.warn(`[dispatch-notification] no webhook for channel=${channel}, falling back`);
       await logDispatch({
         title: body.title, body: body.message, target_type, target_value, user_ids,
-        status: "skipped", channel,
-        error: `No webhook configured for channel ${channel}`,
+        status: "skipped", channel, error: `No webhook for ${channel}`,
         request_payload: body as unknown as Record<string, unknown>,
       });
       return await callFallback(body);
     }
 
+    // Top-level fields make Zapier mapping trivial: {{sender_name}}, {{preview}}, {{userIds}}…
     const zapPayload = {
       type,
       channel,
       title: body.title,
       body: body.message,
+      message: body.message,
+      preview: body.preview ?? body.message,
+      sender_id: body.sender_id ?? (body.data as any)?.sender_id ?? null,
+      sender_name: body.sender_name ?? (body.data as any)?.sender_name ?? null,
+      thread_url: (body.data as any)?.thread_url ?? body.url ?? null,
+      target_mode: body.target_mode ?? (body.broadcast ? "broadcast" : "external_user_ids"),
+      voip: !!(body.data as any)?.voip,
       broadcast: !!body.broadcast,
       userIds: body.userIds ?? [],
       playerIds: body.playerIds ?? [],
@@ -158,10 +145,7 @@ Deno.serve(async (req) => {
       sent_at: new Date().toISOString(),
     };
 
-    console.log(`[dispatch-notification] → Zapier channel=${channel} type=${type} target=${target_type}`);
-
-    let zapStatus = 0;
-    let zapText = "";
+    let zapStatus = 0; let zapText = "";
     try {
       const res = await fetch(webhook, {
         method: "POST",
@@ -170,28 +154,18 @@ Deno.serve(async (req) => {
       });
       zapStatus = res.status;
       zapText = await res.text();
-
       if (res.ok) {
         await logDispatch({
           title: body.title, body: body.message, target_type, target_value, user_ids,
-          status: "sent", channel,
-          recipients: body.broadcast ? null : (user_ids?.length ?? 0),
+          status: "sent", channel, recipients: body.broadcast ? null : (user_ids?.length ?? 0),
           raw_response: { status: zapStatus, body: zapText.slice(0, 500) },
           request_payload: zapPayload as unknown as Record<string, unknown>,
         });
-        return new Response(
-          JSON.stringify({ ok: true, channel, status: zapStatus }),
-          { headers: { ...corsHeaders, "Content-Type": "application/json" } },
-        );
+        return new Response(JSON.stringify({ ok: true, channel, status: zapStatus }),
+          { headers: { ...corsHeaders, "Content-Type": "application/json" } });
       }
+    } catch (e) { zapText = (e as Error).message; }
 
-      console.warn(`[dispatch-notification] Zapier non-2xx channel=${channel}`, zapStatus, zapText);
-    } catch (e) {
-      console.error("[dispatch-notification] Zapier threw", e);
-      zapText = (e as Error).message;
-    }
-
-    // Fall back
     await logDispatch({
       title: body.title, body: body.message, target_type, target_value, user_ids,
       status: "zapier_failed", channel,
@@ -200,16 +174,13 @@ Deno.serve(async (req) => {
     });
     return await callFallback(body);
   } catch (e) {
-    console.error("[dispatch-notification] exception", e);
     await logDispatch({
       title: body?.title ?? null, body: body?.message ?? null,
-      status: "exception", channel: "unknown",
-      error: (e as Error).message,
+      status: "exception", channel: "unknown", error: (e as Error).message,
       request_payload: (body ?? {}) as unknown as Record<string, unknown>,
     });
     return new Response(JSON.stringify({ error: (e as Error).message }), {
-      status: 500,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
+      status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
 });

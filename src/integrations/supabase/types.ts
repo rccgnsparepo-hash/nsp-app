@@ -156,6 +156,36 @@ export type Database = {
           },
         ]
       }
+      chat_preferences: {
+        Row: {
+          background_url: string | null
+          doodle_enabled: boolean
+          id: string
+          peer_id: string | null
+          preset_key: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          background_url?: string | null
+          doodle_enabled?: boolean
+          id?: string
+          peer_id?: string | null
+          preset_key?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          background_url?: string | null
+          doodle_enabled?: boolean
+          id?: string
+          peer_id?: string | null
+          preset_key?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       direct_messages: {
         Row: {
           content: string | null
@@ -243,6 +273,42 @@ export type Database = {
           image_url?: string
           source?: string | null
           title?: string | null
+        }
+        Relationships: []
+      }
+      news_articles: {
+        Row: {
+          category: string
+          fetched_at: string
+          id: string
+          image_url: string | null
+          published_at: string | null
+          source: string
+          summary: string | null
+          title: string
+          url: string
+        }
+        Insert: {
+          category?: string
+          fetched_at?: string
+          id?: string
+          image_url?: string | null
+          published_at?: string | null
+          source: string
+          summary?: string | null
+          title: string
+          url: string
+        }
+        Update: {
+          category?: string
+          fetched_at?: string
+          id?: string
+          image_url?: string | null
+          published_at?: string | null
+          source?: string
+          summary?: string | null
+          title?: string
+          url?: string
         }
         Relationships: []
       }

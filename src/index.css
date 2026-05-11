@@ -123,3 +123,13 @@
     padding-bottom: env(safe-area-inset-bottom, 0px);
   }
 }
+
+/* Chat doodle background */
+.chat-doodle-bg {
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='80' height='80' viewBox='0 0 80 80'><g fill='none' stroke='%23999' stroke-width='1' stroke-opacity='0.08'><circle cx='10' cy='10' r='4'/><path d='M30 20 q10 10 0 20'/><path d='M55 8 l8 8 l-8 8 l-8 -8 z'/><circle cx='65' cy='55' r='3'/><path d='M15 60 q5 -10 15 0'/><path d='M50 70 l4 -8 l4 8'/></g></svg>");
+  background-size: 80px 80px;
+  background-repeat: repeat;
+}
+.dark .chat-doodle-bg {
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='80' height='80' viewBox='0 0 80 80'><g fill='none' stroke='%23fff' stroke-width='1' stroke-opacity='0.05'><circle cx='10' cy='10' r='4'/><path d='M30 20 q10 10 0 20'/><path d='M55 8 l8 8 l-8 8 l-8 -8 z'/><circle cx='65' cy='55' r='3'/><path d='M15 60 q5 -10 15 0'/><path d='M50 70 l4 -8 l4 8'/></g></svg>");
+}

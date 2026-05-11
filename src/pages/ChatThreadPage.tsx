@@ -75,7 +75,13 @@ const ChatThreadPage = () => {
         const inThread = (m.sender_id === user.id && m.recipient_id === userId) ||
                           (m.sender_id === userId && m.recipient_id === user.id);
         if (!inThread) return;
-        setMessages(prev => prev.find(x => x.id === m.id) ? prev : [...prev, m]);
+        setMessages(prev => {
+          if (prev.find(x => x.id === m.id)) return prev;
+          // Replace any optimistic temp from this sender with same content within 30s
+          const tempIdx = prev.findIndex(x => x.id.startsWith('tmp-') && x.sender_id === m.sender_id && x.content === m.content);
+          if (tempIdx >= 0) { const next = [...prev]; next[tempIdx] = m; return next; }
+          return [...prev, m];
+        });
         if (m.recipient_id === user.id) {
           supabase.from('direct_messages').update({ read: true }).eq('id', m.id);
         }
@@ -124,15 +130,26 @@ const ChatThreadPage = () => {
 
   const send = async () => {
     if (!user || !userId || !text.trim()) return;
-    setSending(true);
     const content = text.trim();
+    const tempId = `tmp-${Date.now()}`;
+    // Optimistic insert
+    const optimistic: Msg = {
+      id: tempId, sender_id: user.id, recipient_id: userId,
+      content, created_at: new Date().toISOString(), read: false,
+    };
+    setMessages(prev => [...prev, optimistic]);
     setText('');
     broadcastTyping('stop_typing');
-    const { error } = await supabase.from('direct_messages').insert({
+    const { data, error } = await supabase.from('direct_messages').insert({
       sender_id: user.id, recipient_id: userId, content,
-    });
-    if (error) { toast.error(error.message); setText(content); }
-    setSending(false);
+    }).select().single();
+    if (error) {
+      setMessages(prev => prev.filter(m => m.id !== tempId));
+      toast.error(error.message); setText(content);
+      return;
+    }
+    // Replace temp with real row
+    setMessages(prev => prev.map(m => m.id === tempId ? (data as any) : m));
   };
 
   const sendMedia = async (file: File) => {
@@ -149,6 +166,22 @@ const ChatThreadPage = () => {
       toast.error(e.message || 'Upload failed');
     } finally {
       setUploading(false);
+    }
+  };
+
+  const downloadMedia = async (m: Msg) => {
+    if (!m.media_url) return;
+    try {
+      const res = await fetch(m.media_url);
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = m.media_name || `chat-${m.id}`;
+      document.body.appendChild(a); a.click(); a.remove();
+      URL.revokeObjectURL(url);
+    } catch {
+      window.open(m.media_url, '_blank');
     }
   };
 
@@ -178,27 +211,29 @@ const ChatThreadPage = () => {
   })();
 
   return (
-    <div className="min-h-screen bg-background flex flex-col">
+    <div className="min-h-screen bg-background flex flex-col chat-doodle-bg">
       <header className="sticky top-0 z-40 glass border-b border-border safe-top">
         <div className="flex items-center gap-3 px-4 h-14 max-w-lg mx-auto">
           <button onClick={() => navigate(-1)} className="w-9 h-9 rounded-full bg-muted flex items-center justify-center neumorphic-sm">
             <ArrowLeft className="w-4 h-4 text-foreground" />
           </button>
-          <div className="w-9 h-9 rounded-full bg-muted overflow-hidden">
-            {other?.profile_image_url ? (
-              <img src={other.profile_image_url} alt="" className="w-full h-full object-cover" />
-            ) : (
-              <div className="w-full h-full flex items-center justify-center text-sm font-semibold text-muted-foreground">
-                {other?.full_name?.[0]?.toUpperCase() || '?'}
-              </div>
-            )}
-          </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-semibold text-foreground truncate">{other?.full_name || 'Chat'}</p>
-            <p className="text-[10px] text-muted-foreground">
-              {otherTyping ? <span className="text-primary">typing…</span> : 'Realtime · End-to-end'}
-            </p>
-          </div>
+          <button onClick={() => userId && navigate(`/u/${userId}`)} className="flex items-center gap-3 flex-1 min-w-0 text-left">
+            <div className="w-9 h-9 rounded-full bg-muted overflow-hidden flex-shrink-0">
+              {other?.profile_image_url ? (
+                <img src={other.profile_image_url} alt="" className="w-full h-full object-cover" />
+              ) : (
+                <div className="w-full h-full flex items-center justify-center text-sm font-semibold text-muted-foreground">
+                  {other?.full_name?.[0]?.toUpperCase() || '?'}
+                </div>
+              )}
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-semibold text-foreground truncate">{other?.full_name || 'Chat'}</p>
+              <p className="text-[10px] text-muted-foreground">
+                {otherTyping ? <span className="text-primary">typing…</span> : 'Tap for profile'}
+              </p>
+            </div>
+          </button>
           <button onClick={() => startCall('audio')} aria-label="Voice call"
             className="w-9 h-9 rounded-full bg-muted flex items-center justify-center neumorphic-sm">
             <Phone className="w-4 h-4 text-foreground" />
@@ -218,6 +253,7 @@ const ChatThreadPage = () => {
           const mine = m.sender_id === user?.id;
           const showSeen = mine && i === lastOwnIdx;
           const hasMedia = !!m.media_url;
+          const isOptimistic = m.id.startsWith('tmp-');
           return (
             <motion.div
               key={m.id}
@@ -226,32 +262,44 @@ const ChatThreadPage = () => {
             >
               <div className={`max-w-[78%] rounded-2xl ${hasMedia ? 'p-1' : 'px-3 py-2'} ${
                 mine ? 'bg-primary text-primary-foreground rounded-br-sm' : 'bg-card text-foreground rounded-bl-sm neumorphic-sm'
-              }`}>
+              } ${isOptimistic ? 'opacity-70' : ''}`}>
                 {hasMedia && m.media_type === 'image' && (
-                  <a href={m.media_url!} target="_blank" rel="noreferrer">
-                    <img src={m.media_url!} alt={m.media_name || 'image'} className="rounded-xl max-h-72 object-cover" />
-                  </a>
+                  <div className="relative group">
+                    <a href={m.media_url!} target="_blank" rel="noreferrer">
+                      <img src={m.media_url!} alt={m.media_name || 'image'} className="rounded-xl max-h-72 object-cover" />
+                    </a>
+                    <button onClick={(e) => { e.preventDefault(); downloadMedia(m); }}
+                      className="absolute top-2 right-2 w-8 h-8 rounded-full bg-black/55 text-white flex items-center justify-center backdrop-blur">
+                      <Download className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
                 )}
                 {hasMedia && m.media_type === 'video' && (
-                  <video src={m.media_url!} controls className="rounded-xl max-h-80 w-full" />
+                  <div className="relative">
+                    <video src={m.media_url!} controls className="rounded-xl max-h-80 w-full" />
+                    <button onClick={() => downloadMedia(m)}
+                      className="absolute top-2 right-2 w-8 h-8 rounded-full bg-black/55 text-white flex items-center justify-center backdrop-blur">
+                      <Download className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
                 )}
                 {hasMedia && m.media_type === 'file' && (
-                  <a href={m.media_url!} target="_blank" rel="noreferrer"
-                    className={`flex items-center gap-2 rounded-xl px-3 py-2 ${mine ? 'bg-primary-foreground/10' : 'bg-muted'}`}>
+                  <button onClick={() => downloadMedia(m)}
+                    className={`w-full flex items-center gap-2 rounded-xl px-3 py-2 text-left ${mine ? 'bg-primary-foreground/10' : 'bg-muted'}`}>
                     <FileIcon className="w-5 h-5" />
                     <div className="flex-1 min-w-0">
                       <p className="text-xs font-semibold truncate">{m.media_name}</p>
                       <p className="text-[10px] opacity-70">{formatBytes(m.media_size || 0)}</p>
                     </div>
                     <Download className="w-4 h-4 opacity-70" />
-                  </a>
+                  </button>
                 )}
                 {m.content && (
                   <p className={`text-sm break-words whitespace-pre-wrap ${hasMedia ? 'px-2 pt-1' : ''}`}>{m.content}</p>
                 )}
                 <div className={`flex items-center gap-1 justify-end ${hasMedia ? 'px-2 pb-1' : 'mt-1'} ${mine ? 'text-primary-foreground/70' : 'text-muted-foreground'}`}>
                   <span className="text-[9px]">{format(new Date(m.created_at), 'h:mm a')}</span>
-                  {mine && (m.read ? <CheckCheck className="w-3 h-3" /> : <Check className="w-3 h-3" />)}
+                  {mine && (isOptimistic ? <span className="text-[9px]">·</span> : (m.read ? <CheckCheck className="w-3 h-3" /> : <Check className="w-3 h-3" />))}
                 </div>
               </div>
               {showSeen && m.read && (

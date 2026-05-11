@@ -20,6 +20,9 @@ import SettingsPage from "./pages/SettingsPage";
 import ChatThreadPage from "./pages/ChatThreadPage";
 import ChatListPage from "./pages/ChatListPage";
 import InboxPage from "./pages/InboxPage";
+import UserProfilePage from "./pages/UserProfilePage";
+import NewsFeedPage from "./pages/NewsFeedPage";
+import IframeReaderPage from "./pages/IframeReaderPage";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -57,6 +60,9 @@ const AppRoutes = () => (
     <Route path="/chats" element={<ProtectedRoute><ChatListPage /></ProtectedRoute>} />
     <Route path="/chat/:userId" element={<ProtectedRoute><ChatThreadPage /></ProtectedRoute>} />
     <Route path="/inbox" element={<ProtectedRoute><InboxPage /></ProtectedRoute>} />
+    <Route path="/u/:userId" element={<ProtectedRoute><UserProfilePage /></ProtectedRoute>} />
+    <Route path="/news" element={<ProtectedRoute><NewsFeedPage /></ProtectedRoute>} />
+    <Route path="/read" element={<ProtectedRoute><IframeReaderPage /></ProtectedRoute>} />
     <Route path="*" element={<NotFound />} />
   </Routes>
 );
