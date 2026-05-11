@@ -1,4 +1,5 @@
 import { useRef, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
@@ -114,9 +115,10 @@ const HomePage = () => {
               <h3 className="font-semibold text-foreground">🎉 Happy Birthday!</h3>
             </div>
             {todayBirthdays.map(b => (
-              <p key={b.id} className="text-sm text-foreground">
-                {b.full_name} is celebrating today!
-              </p>
+              <Link key={b.id} to={`/u/${b.id}`}
+                className="block text-sm text-foreground hover:underline">
+                🎂 {b.full_name} is celebrating today! · view profile
+              </Link>
             ))}
           </motion.div>
         )}
@@ -130,8 +132,8 @@ const HomePage = () => {
             </div>
             <div className="flex gap-3 overflow-x-auto pb-1">
               {upcomingBirthdays.map(b => (
-                <div key={b.id} className="flex flex-col items-center min-w-[60px]">
-                  <div className="w-10 h-10 rounded-full bg-muted overflow-hidden">
+                <Link key={b.id} to={`/u/${b.id}`} className="flex flex-col items-center min-w-[60px] active:scale-95 transition-transform">
+                  <div className="w-10 h-10 rounded-full bg-muted overflow-hidden ring-2 ring-primary/20">
                     {b.profile_image_url ? (
                       <img src={b.profile_image_url} alt={b.full_name} className="w-full h-full object-cover" />
                     ) : (
@@ -144,7 +146,7 @@ const HomePage = () => {
                   <span className="text-[10px] text-primary font-medium">
                     {b.daysUntil === 1 ? 'Tomorrow' : `${b.daysUntil}d`}
                   </span>
-                </div>
+                </Link>
               ))}
             </div>
           </div>
