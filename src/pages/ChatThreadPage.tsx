@@ -211,27 +211,29 @@ const ChatThreadPage = () => {
   })();
 
   return (
-    <div className="min-h-screen bg-background flex flex-col">
+    <div className="min-h-screen bg-background flex flex-col chat-doodle-bg">
       <header className="sticky top-0 z-40 glass border-b border-border safe-top">
         <div className="flex items-center gap-3 px-4 h-14 max-w-lg mx-auto">
           <button onClick={() => navigate(-1)} className="w-9 h-9 rounded-full bg-muted flex items-center justify-center neumorphic-sm">
             <ArrowLeft className="w-4 h-4 text-foreground" />
           </button>
-          <div className="w-9 h-9 rounded-full bg-muted overflow-hidden">
-            {other?.profile_image_url ? (
-              <img src={other.profile_image_url} alt="" className="w-full h-full object-cover" />
-            ) : (
-              <div className="w-full h-full flex items-center justify-center text-sm font-semibold text-muted-foreground">
-                {other?.full_name?.[0]?.toUpperCase() || '?'}
-              </div>
-            )}
-          </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-semibold text-foreground truncate">{other?.full_name || 'Chat'}</p>
-            <p className="text-[10px] text-muted-foreground">
-              {otherTyping ? <span className="text-primary">typing…</span> : 'Realtime · End-to-end'}
-            </p>
-          </div>
+          <button onClick={() => userId && navigate(`/u/${userId}`)} className="flex items-center gap-3 flex-1 min-w-0 text-left">
+            <div className="w-9 h-9 rounded-full bg-muted overflow-hidden flex-shrink-0">
+              {other?.profile_image_url ? (
+                <img src={other.profile_image_url} alt="" className="w-full h-full object-cover" />
+              ) : (
+                <div className="w-full h-full flex items-center justify-center text-sm font-semibold text-muted-foreground">
+                  {other?.full_name?.[0]?.toUpperCase() || '?'}
+                </div>
+              )}
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-semibold text-foreground truncate">{other?.full_name || 'Chat'}</p>
+              <p className="text-[10px] text-muted-foreground">
+                {otherTyping ? <span className="text-primary">typing…</span> : 'Tap for profile'}
+              </p>
+            </div>
+          </button>
           <button onClick={() => startCall('audio')} aria-label="Voice call"
             className="w-9 h-9 rounded-full bg-muted flex items-center justify-center neumorphic-sm">
             <Phone className="w-4 h-4 text-foreground" />
@@ -251,6 +253,7 @@ const ChatThreadPage = () => {
           const mine = m.sender_id === user?.id;
           const showSeen = mine && i === lastOwnIdx;
           const hasMedia = !!m.media_url;
+          const isOptimistic = m.id.startsWith('tmp-');
           return (
             <motion.div
               key={m.id}
@@ -259,32 +262,44 @@ const ChatThreadPage = () => {
             >
               <div className={`max-w-[78%] rounded-2xl ${hasMedia ? 'p-1' : 'px-3 py-2'} ${
                 mine ? 'bg-primary text-primary-foreground rounded-br-sm' : 'bg-card text-foreground rounded-bl-sm neumorphic-sm'
-              }`}>
+              } ${isOptimistic ? 'opacity-70' : ''}`}>
                 {hasMedia && m.media_type === 'image' && (
-                  <a href={m.media_url!} target="_blank" rel="noreferrer">
-                    <img src={m.media_url!} alt={m.media_name || 'image'} className="rounded-xl max-h-72 object-cover" />
-                  </a>
+                  <div className="relative group">
+                    <a href={m.media_url!} target="_blank" rel="noreferrer">
+                      <img src={m.media_url!} alt={m.media_name || 'image'} className="rounded-xl max-h-72 object-cover" />
+                    </a>
+                    <button onClick={(e) => { e.preventDefault(); downloadMedia(m); }}
+                      className="absolute top-2 right-2 w-8 h-8 rounded-full bg-black/55 text-white flex items-center justify-center backdrop-blur">
+                      <Download className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
                 )}
                 {hasMedia && m.media_type === 'video' && (
-                  <video src={m.media_url!} controls className="rounded-xl max-h-80 w-full" />
+                  <div className="relative">
+                    <video src={m.media_url!} controls className="rounded-xl max-h-80 w-full" />
+                    <button onClick={() => downloadMedia(m)}
+                      className="absolute top-2 right-2 w-8 h-8 rounded-full bg-black/55 text-white flex items-center justify-center backdrop-blur">
+                      <Download className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
                 )}
                 {hasMedia && m.media_type === 'file' && (
-                  <a href={m.media_url!} target="_blank" rel="noreferrer"
-                    className={`flex items-center gap-2 rounded-xl px-3 py-2 ${mine ? 'bg-primary-foreground/10' : 'bg-muted'}`}>
+                  <button onClick={() => downloadMedia(m)}
+                    className={`w-full flex items-center gap-2 rounded-xl px-3 py-2 text-left ${mine ? 'bg-primary-foreground/10' : 'bg-muted'}`}>
                     <FileIcon className="w-5 h-5" />
                     <div className="flex-1 min-w-0">
                       <p className="text-xs font-semibold truncate">{m.media_name}</p>
                       <p className="text-[10px] opacity-70">{formatBytes(m.media_size || 0)}</p>
                     </div>
                     <Download className="w-4 h-4 opacity-70" />
-                  </a>
+                  </button>
                 )}
                 {m.content && (
                   <p className={`text-sm break-words whitespace-pre-wrap ${hasMedia ? 'px-2 pt-1' : ''}`}>{m.content}</p>
                 )}
                 <div className={`flex items-center gap-1 justify-end ${hasMedia ? 'px-2 pb-1' : 'mt-1'} ${mine ? 'text-primary-foreground/70' : 'text-muted-foreground'}`}>
                   <span className="text-[9px]">{format(new Date(m.created_at), 'h:mm a')}</span>
-                  {mine && (m.read ? <CheckCheck className="w-3 h-3" /> : <Check className="w-3 h-3" />)}
+                  {mine && (isOptimistic ? <span className="text-[9px]">·</span> : (m.read ? <CheckCheck className="w-3 h-3" /> : <Check className="w-3 h-3" />))}
                 </div>
               </div>
               {showSeen && m.read && (
