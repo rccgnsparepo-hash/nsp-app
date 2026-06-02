@@ -1,7 +1,8 @@
 import { useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { Mic, MicOff, Video, VideoOff, PhoneOff } from 'lucide-react';
-import { useWebRTC, CallKind } from '@/hooks/useWebRTC';
+import { CallKind } from '@/hooks/useWebRTC';
+import { useLiveKit } from '@/hooks/useLiveKit';
 
 interface Props {
   sessionId: string;
@@ -15,7 +16,7 @@ interface Props {
 
 const CallScreen = ({ sessionId, selfId, isCaller, kind, peerName, peerAvatar, onClose }: Props) => {
   const { status, muted, cameraOff, localStream, remoteStream, hangup, toggleMute, toggleCamera } =
-    useWebRTC({ sessionId, selfId, isCaller, kind, onEnded: onClose });
+    useLiveKit({ sessionId, selfId, isCaller, kind, onEnded: onClose });
 
   const localRef = useRef<HTMLVideoElement>(null);
   const remoteRef = useRef<HTMLVideoElement>(null);
