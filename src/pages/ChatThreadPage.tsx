@@ -264,7 +264,7 @@ const ChatThreadPage = () => {
         </div>
       </header>
 
-      <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-4 max-w-lg mx-auto w-full space-y-2">
+      <div ref={scrollRef} className="flex-1 overflow-y-auto no-scrollbar px-4 py-4 max-w-lg lg:max-w-3xl mx-auto w-full space-y-2">
         {messages.length === 0 && (
           <p className="text-center text-sm text-muted-foreground py-10">Say hi to start the conversation</p>
         )}
@@ -274,57 +274,72 @@ const ChatThreadPage = () => {
           const hasMedia = !!m.media_url;
           const isOptimistic = m.id.startsWith('tmp-');
           return (
-            <motion.div
-              key={m.id}
-              initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }}
-              className={`flex flex-col ${mine ? 'items-end' : 'items-start'}`}
-            >
-              <div className={`max-w-[78%] rounded-2xl ${hasMedia ? 'p-1' : 'px-3 py-2'} ${
-                mine ? 'bg-primary text-primary-foreground rounded-br-sm' : 'bg-card text-foreground rounded-bl-sm neumorphic-sm'
-              } ${isOptimistic ? 'opacity-70' : ''}`}>
-                {hasMedia && m.media_type === 'image' && (
-                  <div className="relative group">
-                    <a href={m.media_url!} target="_blank" rel="noreferrer">
-                      <img src={m.media_url!} alt={m.media_name || 'image'} className="rounded-xl max-h-72 object-cover" />
-                    </a>
-                    <button onClick={(e) => { e.preventDefault(); downloadMedia(m); }}
-                      className="absolute top-2 right-2 w-8 h-8 rounded-full bg-black/55 text-white flex items-center justify-center backdrop-blur">
-                      <Download className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                )}
-                {hasMedia && m.media_type === 'video' && (
-                  <div className="relative">
-                    <video src={m.media_url!} controls className="rounded-xl max-h-80 w-full" />
-                    <button onClick={() => downloadMedia(m)}
-                      className="absolute top-2 right-2 w-8 h-8 rounded-full bg-black/55 text-white flex items-center justify-center backdrop-blur">
-                      <Download className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                )}
-                {hasMedia && m.media_type === 'file' && (
-                  <button onClick={() => downloadMedia(m)}
-                    className={`w-full flex items-center gap-2 rounded-xl px-3 py-2 text-left ${mine ? 'bg-primary-foreground/10' : 'bg-muted'}`}>
-                    <FileIcon className="w-5 h-5" />
-                    <div className="flex-1 min-w-0">
-                      <p className="text-xs font-semibold truncate">{m.media_name}</p>
-                      <p className="text-[10px] opacity-70">{formatBytes(m.media_size || 0)}</p>
+            <SwipeMessage key={m.id} onReply={() => setReplyTo(m)} mine={mine}>
+              <motion.div
+                initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }}
+                className={`flex flex-col ${mine ? 'items-end' : 'items-start'}`}
+              >
+                <div className={`max-w-[78%] rounded-2xl ${hasMedia ? 'p-1' : 'px-3 py-2'} ${
+                  mine ? 'bg-primary text-primary-foreground rounded-br-sm' : 'bg-card text-foreground rounded-bl-sm neumorphic-sm'
+                } ${isOptimistic ? 'opacity-70' : ''}`}>
+                  {hasMedia && m.media_type === 'image' && (
+                    <div className="relative group">
+                      <a href={m.media_url!} target="_blank" rel="noreferrer">
+                        <img src={m.media_url!} alt={m.media_name || 'image'} className="rounded-xl max-h-72 object-cover" />
+                      </a>
+                      <button onClick={(e) => { e.preventDefault(); downloadMedia(m); }}
+                        className="absolute top-2 right-2 w-8 h-8 rounded-full bg-black/55 text-white flex items-center justify-center backdrop-blur">
+                        <Download className="w-3.5 h-3.5" />
+                      </button>
                     </div>
-                    <Download className="w-4 h-4 opacity-70" />
-                  </button>
-                )}
-                {m.content && (
-                  <p className={`text-sm break-words whitespace-pre-wrap ${hasMedia ? 'px-2 pt-1' : ''}`}>{m.content}</p>
-                )}
-                <div className={`flex items-center gap-1 justify-end ${hasMedia ? 'px-2 pb-1' : 'mt-1'} ${mine ? 'text-primary-foreground/70' : 'text-muted-foreground'}`}>
-                  <span className="text-[9px]">{format(new Date(m.created_at), 'h:mm a')}</span>
-                  {mine && (isOptimistic ? <span className="text-[9px]">·</span> : (m.read ? <CheckCheck className="w-3 h-3" /> : <Check className="w-3 h-3" />))}
+                  )}
+                  {hasMedia && m.media_type === 'video' && (
+                    <div className="relative">
+                      <video src={m.media_url!} controls className="rounded-xl max-h-80 w-full" />
+                      <button onClick={() => downloadMedia(m)}
+                        className="absolute top-2 right-2 w-8 h-8 rounded-full bg-black/55 text-white flex items-center justify-center backdrop-blur">
+                        <Download className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  )}
+                  {hasMedia && m.media_type === 'file' && (
+                    <button onClick={() => downloadMedia(m)}
+                      className={`w-full flex items-center gap-2 rounded-xl px-3 py-2 text-left ${mine ? 'bg-primary-foreground/10' : 'bg-muted'}`}>
+                      <FileIcon className="w-5 h-5" />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-semibold truncate">{m.media_name}</p>
+                        <p className="text-[10px] opacity-70">{formatBytes(m.media_size || 0)}</p>
+                      </div>
+                      <Download className="w-4 h-4 opacity-70" />
+                    </button>
+                  )}
+                  {m.content && (() => {
+                    // Render embedded reply quote on a separate styled block
+                    const lines = m.content.split('\n');
+                    if (lines[0]?.startsWith('↪ ')) {
+                      const quote = lines[0].slice(2);
+                      const body = lines.slice(1).join('\n');
+                      return (
+                        <>
+                          <div className={`mb-1 px-2 py-1 rounded-md border-l-2 text-[11px] opacity-80 ${mine ? 'border-primary-foreground/70 bg-primary-foreground/10' : 'border-primary bg-primary/10'}`}>
+                            {quote}
+                          </div>
+                          {body && <p className={`text-sm break-words whitespace-pre-wrap ${hasMedia ? 'px-2 pt-1' : ''}`}>{body}</p>}
+                        </>
+                      );
+                    }
+                    return <p className={`text-sm break-words whitespace-pre-wrap ${hasMedia ? 'px-2 pt-1' : ''}`}>{m.content}</p>;
+                  })()}
+                  <div className={`flex items-center gap-1 justify-end ${hasMedia ? 'px-2 pb-1' : 'mt-1'} ${mine ? 'text-primary-foreground/70' : 'text-muted-foreground'}`}>
+                    <span className="text-[9px]">{format(new Date(m.created_at), 'h:mm a')}</span>
+                    {mine && (isOptimistic ? <span className="text-[9px]">·</span> : (m.read ? <CheckCheck className="w-3 h-3" /> : <Check className="w-3 h-3" />))}
+                  </div>
                 </div>
-              </div>
-              {showSeen && m.read && (
-                <span className="text-[9px] text-muted-foreground mt-0.5 mr-1">Seen</span>
-              )}
-            </motion.div>
+                {showSeen && m.read && (
+                  <span className="text-[9px] text-muted-foreground mt-0.5 mr-1">Seen</span>
+                )}
+              </motion.div>
+            </SwipeMessage>
           );
         })}
 
@@ -355,10 +370,31 @@ const ChatThreadPage = () => {
 
       <div className="sticky bottom-0 glass border-t border-border safe-bottom">
         <AnimatePresence>
+          {replyTo && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }}
+              className="px-3 pt-2 max-w-lg lg:max-w-3xl mx-auto"
+            >
+              <div className="flex items-center gap-2 bg-muted rounded-xl px-3 py-2 border-l-4 border-primary">
+                <CornerUpLeft className="w-4 h-4 text-primary flex-shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <p className="text-[10px] font-semibold text-primary">
+                    Replying to {replyTo.sender_id === user?.id ? 'yourself' : (other?.full_name || 'them')}
+                  </p>
+                  <p className="text-xs text-muted-foreground truncate">{previewOf(replyTo)}</p>
+                </div>
+                <button onClick={() => setReplyTo(null)} className="w-6 h-6 rounded-full bg-background flex items-center justify-center">
+                  <X className="w-3 h-3" />
+                </button>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+        <AnimatePresence>
           {showAttach && (
             <motion.div
               initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 10 }}
-              className="px-4 py-3 max-w-lg mx-auto grid grid-cols-3 gap-2"
+              className="px-4 py-3 max-w-lg lg:max-w-3xl mx-auto grid grid-cols-3 gap-2"
             >
               <button onClick={() => imgInputRef.current?.click()} className="flex flex-col items-center gap-1 rounded-xl bg-muted py-3">
                 <ImageIcon className="w-5 h-5 text-primary" />
@@ -378,7 +414,7 @@ const ChatThreadPage = () => {
             </motion.div>
           )}
         </AnimatePresence>
-        <div className="flex items-center gap-2 px-3 py-3 max-w-lg mx-auto">
+        <div className="flex items-center gap-2 px-3 py-3 max-w-lg lg:max-w-3xl mx-auto">
           <button onClick={() => setShowAttach(s => !s)} disabled={uploading}
             className="w-10 h-10 rounded-full bg-muted flex-shrink-0 flex items-center justify-center text-foreground">
             {showAttach ? <X className="w-4 h-4" /> : <Paperclip className="w-4 h-4" />}
@@ -388,7 +424,7 @@ const ChatThreadPage = () => {
             onChange={(e) => handleChange(e.target.value)}
             onBlur={() => broadcastTyping('stop_typing')}
             onKeyDown={(e) => { if (e.key === 'Enter') send(); }}
-            placeholder="Type a message…"
+            placeholder={replyTo ? 'Type your reply…' : 'Type a message…'}
             className="bg-muted border-0 neumorphic-inset rounded-full"
           />
           <Button onClick={send} disabled={sending || !text.trim()} className="rounded-full bg-primary text-primary-foreground h-10 w-10 p-0 flex-shrink-0">
