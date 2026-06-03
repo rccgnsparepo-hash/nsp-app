@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { motion, AnimatePresence } from 'framer-motion';
-import { ArrowLeft, Send, Check, CheckCheck, Paperclip, Image as ImageIcon, Video as VideoIcon, File as FileIcon, X, Phone, Download } from 'lucide-react';
+import { motion, AnimatePresence, useMotionValue, useTransform, PanInfo } from 'framer-motion';
+import { ArrowLeft, Send, Check, CheckCheck, Paperclip, Image as ImageIcon, Video as VideoIcon, File as FileIcon, X, Phone, Download, Reply, CornerUpLeft } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
@@ -35,7 +35,9 @@ const ChatThreadPage = () => {
   const [uploading, setUploading] = useState(false);
   const [otherTyping, setOtherTyping] = useState(false);
   const [showAttach, setShowAttach] = useState(false);
+  const [replyTo, setReplyTo] = useState<Msg | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const didInitialScrollRef = useRef(false);
   const channelRef = useRef<any>(null);
   const typingTimeoutRef = useRef<any>(null);
   const lastTypingSentRef = useRef<number>(0);
@@ -110,7 +112,14 @@ const ChatThreadPage = () => {
   }, [user, userId, channelName]);
 
   useEffect(() => {
-    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
+    if (!scrollRef.current) return;
+    // First paint after messages load: jump instantly to bottom (no glitch / no animation)
+    if (!didInitialScrollRef.current && messages.length > 0) {
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+      didInitialScrollRef.current = true;
+      return;
+    }
+    scrollRef.current.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
   }, [messages, otherTyping]);
 
   const broadcastTyping = (event: 'typing' | 'stop_typing') => {
@@ -128,27 +137,37 @@ const ChatThreadPage = () => {
     if (!v.trim()) broadcastTyping('stop_typing');
   };
 
+  const previewOf = (m: Msg) => {
+    if (m.media_type === 'image') return '📷 Photo';
+    if (m.media_type === 'video') return '🎥 Video';
+    if (m.media_type === 'file') return `📎 ${m.media_name || 'File'}`;
+    return m.content || '';
+  };
+
   const send = async () => {
     if (!user || !userId || !text.trim()) return;
-    const content = text.trim();
+    const raw = text.trim();
+    // Embed quoted reply so the recipient sees what was being replied to
+    const content = replyTo
+      ? `↪ ${(replyTo.sender_id === user.id ? 'You' : (other?.full_name || 'Them'))}: ${previewOf(replyTo).slice(0, 120)}\n${raw}`
+      : raw;
     const tempId = `tmp-${Date.now()}`;
-    // Optimistic insert
     const optimistic: Msg = {
       id: tempId, sender_id: user.id, recipient_id: userId,
       content, created_at: new Date().toISOString(), read: false,
     };
     setMessages(prev => [...prev, optimistic]);
     setText('');
+    setReplyTo(null);
     broadcastTyping('stop_typing');
     const { data, error } = await supabase.from('direct_messages').insert({
       sender_id: user.id, recipient_id: userId, content,
     }).select().single();
     if (error) {
       setMessages(prev => prev.filter(m => m.id !== tempId));
-      toast.error(error.message); setText(content);
+      toast.error(error.message); setText(raw);
       return;
     }
-    // Replace temp with real row
     setMessages(prev => prev.map(m => m.id === tempId ? (data as any) : m));
   };
 
