@@ -21,6 +21,13 @@
 </head>
 
   <body>
+    <script>
+      // Apply theme synchronously before React renders to avoid flash/glitch
+      try {
+        var t = localStorage.getItem('nsp-theme');
+        if (t === 'dark') document.documentElement.classList.add('dark');
+      } catch (e) {}
+    </script>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
