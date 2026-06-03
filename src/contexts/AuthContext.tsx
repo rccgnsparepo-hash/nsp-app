@@ -40,6 +40,15 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       .single();
     setProfile(profileData);
 
+    // Sync theme from Supabase on every load so it never glitches back to light
+    try {
+      const serverTheme = profileData?.theme_preference;
+      if (serverTheme === 'dark' || serverTheme === 'light') {
+        localStorage.setItem('nsp-theme', serverTheme);
+        document.documentElement.classList.toggle('dark', serverTheme === 'dark');
+      }
+    } catch {}
+
     const { data: roleData } = await supabase
       .from('user_roles')
       .select('role')

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { motion, AnimatePresence } from 'framer-motion';
-import { ArrowLeft, Send, Check, CheckCheck, Paperclip, Image as ImageIcon, Video as VideoIcon, File as FileIcon, X, Phone, Download } from 'lucide-react';
+import { motion, AnimatePresence, useMotionValue, useTransform, PanInfo } from 'framer-motion';
+import { ArrowLeft, Send, Check, CheckCheck, Paperclip, Image as ImageIcon, Video as VideoIcon, File as FileIcon, X, Phone, Download, Reply, CornerUpLeft } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
@@ -35,7 +35,9 @@ const ChatThreadPage = () => {
   const [uploading, setUploading] = useState(false);
   const [otherTyping, setOtherTyping] = useState(false);
   const [showAttach, setShowAttach] = useState(false);
+  const [replyTo, setReplyTo] = useState<Msg | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const didInitialScrollRef = useRef(false);
   const channelRef = useRef<any>(null);
   const typingTimeoutRef = useRef<any>(null);
   const lastTypingSentRef = useRef<number>(0);
@@ -110,7 +112,14 @@ const ChatThreadPage = () => {
   }, [user, userId, channelName]);
 
   useEffect(() => {
-    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
+    if (!scrollRef.current) return;
+    // First paint after messages load: jump instantly to bottom (no glitch / no animation)
+    if (!didInitialScrollRef.current && messages.length > 0) {
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+      didInitialScrollRef.current = true;
+      return;
+    }
+    scrollRef.current.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
   }, [messages, otherTyping]);
 
   const broadcastTyping = (event: 'typing' | 'stop_typing') => {
@@ -128,27 +137,37 @@ const ChatThreadPage = () => {
     if (!v.trim()) broadcastTyping('stop_typing');
   };
 
+  const previewOf = (m: Msg) => {
+    if (m.media_type === 'image') return '📷 Photo';
+    if (m.media_type === 'video') return '🎥 Video';
+    if (m.media_type === 'file') return `📎 ${m.media_name || 'File'}`;
+    return m.content || '';
+  };
+
   const send = async () => {
     if (!user || !userId || !text.trim()) return;
-    const content = text.trim();
+    const raw = text.trim();
+    // Embed quoted reply so the recipient sees what was being replied to
+    const content = replyTo
+      ? `↪ ${(replyTo.sender_id === user.id ? 'You' : (other?.full_name || 'Them'))}: ${previewOf(replyTo).slice(0, 120)}\n${raw}`
+      : raw;
     const tempId = `tmp-${Date.now()}`;
-    // Optimistic insert
     const optimistic: Msg = {
       id: tempId, sender_id: user.id, recipient_id: userId,
       content, created_at: new Date().toISOString(), read: false,
     };
     setMessages(prev => [...prev, optimistic]);
     setText('');
+    setReplyTo(null);
     broadcastTyping('stop_typing');
     const { data, error } = await supabase.from('direct_messages').insert({
       sender_id: user.id, recipient_id: userId, content,
     }).select().single();
     if (error) {
       setMessages(prev => prev.filter(m => m.id !== tempId));
-      toast.error(error.message); setText(content);
+      toast.error(error.message); setText(raw);
       return;
     }
-    // Replace temp with real row
     setMessages(prev => prev.map(m => m.id === tempId ? (data as any) : m));
   };
 
@@ -245,7 +264,7 @@ const ChatThreadPage = () => {
         </div>
       </header>
 
-      <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-4 max-w-lg mx-auto w-full space-y-2">
+      <div ref={scrollRef} className="flex-1 overflow-y-auto no-scrollbar px-4 py-4 max-w-lg lg:max-w-3xl mx-auto w-full space-y-2">
         {messages.length === 0 && (
           <p className="text-center text-sm text-muted-foreground py-10">Say hi to start the conversation</p>
         )}
@@ -255,57 +274,72 @@ const ChatThreadPage = () => {
           const hasMedia = !!m.media_url;
           const isOptimistic = m.id.startsWith('tmp-');
           return (
-            <motion.div
-              key={m.id}
-              initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }}
-              className={`flex flex-col ${mine ? 'items-end' : 'items-start'}`}
-            >
-              <div className={`max-w-[78%] rounded-2xl ${hasMedia ? 'p-1' : 'px-3 py-2'} ${
-                mine ? 'bg-primary text-primary-foreground rounded-br-sm' : 'bg-card text-foreground rounded-bl-sm neumorphic-sm'
-              } ${isOptimistic ? 'opacity-70' : ''}`}>
-                {hasMedia && m.media_type === 'image' && (
-                  <div className="relative group">
-                    <a href={m.media_url!} target="_blank" rel="noreferrer">
-                      <img src={m.media_url!} alt={m.media_name || 'image'} className="rounded-xl max-h-72 object-cover" />
-                    </a>
-                    <button onClick={(e) => { e.preventDefault(); downloadMedia(m); }}
-                      className="absolute top-2 right-2 w-8 h-8 rounded-full bg-black/55 text-white flex items-center justify-center backdrop-blur">
-                      <Download className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                )}
-                {hasMedia && m.media_type === 'video' && (
-                  <div className="relative">
-                    <video src={m.media_url!} controls className="rounded-xl max-h-80 w-full" />
-                    <button onClick={() => downloadMedia(m)}
-                      className="absolute top-2 right-2 w-8 h-8 rounded-full bg-black/55 text-white flex items-center justify-center backdrop-blur">
-                      <Download className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                )}
-                {hasMedia && m.media_type === 'file' && (
-                  <button onClick={() => downloadMedia(m)}
-                    className={`w-full flex items-center gap-2 rounded-xl px-3 py-2 text-left ${mine ? 'bg-primary-foreground/10' : 'bg-muted'}`}>
-                    <FileIcon className="w-5 h-5" />
-                    <div className="flex-1 min-w-0">
-                      <p className="text-xs font-semibold truncate">{m.media_name}</p>
-                      <p className="text-[10px] opacity-70">{formatBytes(m.media_size || 0)}</p>
+            <SwipeMessage key={m.id} onReply={() => setReplyTo(m)} mine={mine}>
+              <motion.div
+                initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }}
+                className={`flex flex-col ${mine ? 'items-end' : 'items-start'}`}
+              >
+                <div className={`max-w-[78%] rounded-2xl ${hasMedia ? 'p-1' : 'px-3 py-2'} ${
+                  mine ? 'bg-primary text-primary-foreground rounded-br-sm' : 'bg-card text-foreground rounded-bl-sm neumorphic-sm'
+                } ${isOptimistic ? 'opacity-70' : ''}`}>
+                  {hasMedia && m.media_type === 'image' && (
+                    <div className="relative group">
+                      <a href={m.media_url!} target="_blank" rel="noreferrer">
+                        <img src={m.media_url!} alt={m.media_name || 'image'} className="rounded-xl max-h-72 object-cover" />
+                      </a>
+                      <button onClick={(e) => { e.preventDefault(); downloadMedia(m); }}
+                        className="absolute top-2 right-2 w-8 h-8 rounded-full bg-black/55 text-white flex items-center justify-center backdrop-blur">
+                        <Download className="w-3.5 h-3.5" />
+                      </button>
                     </div>
-                    <Download className="w-4 h-4 opacity-70" />
-                  </button>
-                )}
-                {m.content && (
-                  <p className={`text-sm break-words whitespace-pre-wrap ${hasMedia ? 'px-2 pt-1' : ''}`}>{m.content}</p>
-                )}
-                <div className={`flex items-center gap-1 justify-end ${hasMedia ? 'px-2 pb-1' : 'mt-1'} ${mine ? 'text-primary-foreground/70' : 'text-muted-foreground'}`}>
-                  <span className="text-[9px]">{format(new Date(m.created_at), 'h:mm a')}</span>
-                  {mine && (isOptimistic ? <span className="text-[9px]">·</span> : (m.read ? <CheckCheck className="w-3 h-3" /> : <Check className="w-3 h-3" />))}
+                  )}
+                  {hasMedia && m.media_type === 'video' && (
+                    <div className="relative">
+                      <video src={m.media_url!} controls className="rounded-xl max-h-80 w-full" />
+                      <button onClick={() => downloadMedia(m)}
+                        className="absolute top-2 right-2 w-8 h-8 rounded-full bg-black/55 text-white flex items-center justify-center backdrop-blur">
+                        <Download className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  )}
+                  {hasMedia && m.media_type === 'file' && (
+                    <button onClick={() => downloadMedia(m)}
+                      className={`w-full flex items-center gap-2 rounded-xl px-3 py-2 text-left ${mine ? 'bg-primary-foreground/10' : 'bg-muted'}`}>
+                      <FileIcon className="w-5 h-5" />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-semibold truncate">{m.media_name}</p>
+                        <p className="text-[10px] opacity-70">{formatBytes(m.media_size || 0)}</p>
+                      </div>
+                      <Download className="w-4 h-4 opacity-70" />
+                    </button>
+                  )}
+                  {m.content && (() => {
+                    // Render embedded reply quote on a separate styled block
+                    const lines = m.content.split('\n');
+                    if (lines[0]?.startsWith('↪ ')) {
+                      const quote = lines[0].slice(2);
+                      const body = lines.slice(1).join('\n');
+                      return (
+                        <>
+                          <div className={`mb-1 px-2 py-1 rounded-md border-l-2 text-[11px] opacity-80 ${mine ? 'border-primary-foreground/70 bg-primary-foreground/10' : 'border-primary bg-primary/10'}`}>
+                            {quote}
+                          </div>
+                          {body && <p className={`text-sm break-words whitespace-pre-wrap ${hasMedia ? 'px-2 pt-1' : ''}`}>{body}</p>}
+                        </>
+                      );
+                    }
+                    return <p className={`text-sm break-words whitespace-pre-wrap ${hasMedia ? 'px-2 pt-1' : ''}`}>{m.content}</p>;
+                  })()}
+                  <div className={`flex items-center gap-1 justify-end ${hasMedia ? 'px-2 pb-1' : 'mt-1'} ${mine ? 'text-primary-foreground/70' : 'text-muted-foreground'}`}>
+                    <span className="text-[9px]">{format(new Date(m.created_at), 'h:mm a')}</span>
+                    {mine && (isOptimistic ? <span className="text-[9px]">·</span> : (m.read ? <CheckCheck className="w-3 h-3" /> : <Check className="w-3 h-3" />))}
+                  </div>
                 </div>
-              </div>
-              {showSeen && m.read && (
-                <span className="text-[9px] text-muted-foreground mt-0.5 mr-1">Seen</span>
-              )}
-            </motion.div>
+                {showSeen && m.read && (
+                  <span className="text-[9px] text-muted-foreground mt-0.5 mr-1">Seen</span>
+                )}
+              </motion.div>
+            </SwipeMessage>
           );
         })}
 
@@ -336,10 +370,31 @@ const ChatThreadPage = () => {
 
       <div className="sticky bottom-0 glass border-t border-border safe-bottom">
         <AnimatePresence>
+          {replyTo && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }}
+              className="px-3 pt-2 max-w-lg lg:max-w-3xl mx-auto"
+            >
+              <div className="flex items-center gap-2 bg-muted rounded-xl px-3 py-2 border-l-4 border-primary">
+                <CornerUpLeft className="w-4 h-4 text-primary flex-shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <p className="text-[10px] font-semibold text-primary">
+                    Replying to {replyTo.sender_id === user?.id ? 'yourself' : (other?.full_name || 'them')}
+                  </p>
+                  <p className="text-xs text-muted-foreground truncate">{previewOf(replyTo)}</p>
+                </div>
+                <button onClick={() => setReplyTo(null)} className="w-6 h-6 rounded-full bg-background flex items-center justify-center">
+                  <X className="w-3 h-3" />
+                </button>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+        <AnimatePresence>
           {showAttach && (
             <motion.div
               initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 10 }}
-              className="px-4 py-3 max-w-lg mx-auto grid grid-cols-3 gap-2"
+              className="px-4 py-3 max-w-lg lg:max-w-3xl mx-auto grid grid-cols-3 gap-2"
             >
               <button onClick={() => imgInputRef.current?.click()} className="flex flex-col items-center gap-1 rounded-xl bg-muted py-3">
                 <ImageIcon className="w-5 h-5 text-primary" />
@@ -359,7 +414,7 @@ const ChatThreadPage = () => {
             </motion.div>
           )}
         </AnimatePresence>
-        <div className="flex items-center gap-2 px-3 py-3 max-w-lg mx-auto">
+        <div className="flex items-center gap-2 px-3 py-3 max-w-lg lg:max-w-3xl mx-auto">
           <button onClick={() => setShowAttach(s => !s)} disabled={uploading}
             className="w-10 h-10 rounded-full bg-muted flex-shrink-0 flex items-center justify-center text-foreground">
             {showAttach ? <X className="w-4 h-4" /> : <Paperclip className="w-4 h-4" />}
@@ -369,7 +424,7 @@ const ChatThreadPage = () => {
             onChange={(e) => handleChange(e.target.value)}
             onBlur={() => broadcastTyping('stop_typing')}
             onKeyDown={(e) => { if (e.key === 'Enter') send(); }}
-            placeholder="Type a message…"
+            placeholder={replyTo ? 'Type your reply…' : 'Type a message…'}
             className="bg-muted border-0 neumorphic-inset rounded-full"
           />
           <Button onClick={send} disabled={sending || !text.trim()} className="rounded-full bg-primary text-primary-foreground h-10 w-10 p-0 flex-shrink-0">
@@ -384,6 +439,43 @@ const ChatThreadPage = () => {
         onChange={(e) => { const f = e.target.files?.[0]; if (f) sendMedia(f); e.target.value = ''; }} />
       <input ref={fileInputRef} type="file" hidden
         onChange={(e) => { const f = e.target.files?.[0]; if (f) sendMedia(f); e.target.value = ''; }} />
+    </div>
+  );
+};
+
+// Swipe-to-reply wrapper using framer-motion. Drag right (for received msgs) or left (for own msgs)
+// past a threshold triggers onReply, and shows a reply icon indicator that grows with drag distance.
+const SwipeMessage = ({
+  children, onReply, mine,
+}: { children: React.ReactNode; onReply: () => void; mine: boolean }) => {
+  const x = useMotionValue(0);
+  // Indicator opacity grows as you drag; constrain side based on bubble side
+  const indicatorOpacity = useTransform(x, mine ? [-80, -20, 0] : [0, 20, 80], mine ? [1, 0.2, 0] : [0, 0.2, 1]);
+  const indicatorScale = useTransform(x, mine ? [-80, 0] : [0, 80], [1, 0.6]);
+
+  const onDragEnd = (_: any, info: PanInfo) => {
+    const triggered = mine ? info.offset.x < -60 : info.offset.x > 60;
+    if (triggered) onReply();
+  };
+
+  return (
+    <div className="relative">
+      <motion.div
+        className={`absolute top-1/2 -translate-y-1/2 ${mine ? 'right-2' : 'left-2'} w-8 h-8 rounded-full bg-primary/15 flex items-center justify-center pointer-events-none`}
+        style={{ opacity: indicatorOpacity, scale: indicatorScale }}
+      >
+        <Reply className="w-4 h-4 text-primary" />
+      </motion.div>
+      <motion.div
+        drag="x"
+        dragConstraints={{ left: mine ? -100 : 0, right: mine ? 0 : 100 }}
+        dragElastic={0.35}
+        dragSnapToOrigin
+        onDragEnd={onDragEnd}
+        style={{ x }}
+      >
+        {children}
+      </motion.div>
     </div>
   );
 };
