@@ -443,4 +443,41 @@ const ChatThreadPage = () => {
   );
 };
 
+// Swipe-to-reply wrapper using framer-motion. Drag right (for received msgs) or left (for own msgs)
+// past a threshold triggers onReply, and shows a reply icon indicator that grows with drag distance.
+const SwipeMessage = ({
+  children, onReply, mine,
+}: { children: React.ReactNode; onReply: () => void; mine: boolean }) => {
+  const x = useMotionValue(0);
+  // Indicator opacity grows as you drag; constrain side based on bubble side
+  const indicatorOpacity = useTransform(x, mine ? [-80, -20, 0] : [0, 20, 80], mine ? [1, 0.2, 0] : [0, 0.2, 1]);
+  const indicatorScale = useTransform(x, mine ? [-80, 0] : [0, 80], [1, 0.6]);
+
+  const onDragEnd = (_: any, info: PanInfo) => {
+    const triggered = mine ? info.offset.x < -60 : info.offset.x > 60;
+    if (triggered) onReply();
+  };
+
+  return (
+    <div className="relative">
+      <motion.div
+        className={`absolute top-1/2 -translate-y-1/2 ${mine ? 'right-2' : 'left-2'} w-8 h-8 rounded-full bg-primary/15 flex items-center justify-center pointer-events-none`}
+        style={{ opacity: indicatorOpacity, scale: indicatorScale }}
+      >
+        <Reply className="w-4 h-4 text-primary" />
+      </motion.div>
+      <motion.div
+        drag="x"
+        dragConstraints={{ left: mine ? -100 : 0, right: mine ? 0 : 100 }}
+        dragElastic={0.35}
+        dragSnapToOrigin
+        onDragEnd={onDragEnd}
+        style={{ x }}
+      >
+        {children}
+      </motion.div>
+    </div>
+  );
+};
+
 export default ChatThreadPage;
