@@ -13,13 +13,13 @@ import { HandHeart, Plus, X, Send } from 'lucide-react';
 
 const PrayerPage = () => {
   const { data: prayers, isLoading } = usePrayerRequests();
-  const { user } = useAuth();
+  const { user, isAdmin } = useAuth();
   const [showForm, setShowForm] = useState(false);
   const [message, setMessage] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
   const handleSubmit = async () => {
-    if (!message.trim() || !user) return;
+    if (!message.trim() || !user || !isAdmin) return;
     setSubmitting(true);
     try {
       const { error } = await supabase.from('prayer_requests').insert({
@@ -59,20 +59,20 @@ const PrayerPage = () => {
     <AppLayout>
       <AppHeader
         title="Prayer Requests"
-        right={
+        right={isAdmin ? (
           <button
             onClick={() => setShowForm(!showForm)}
-            className="w-9 h-9 rounded-full bg-primary flex items-center justify-center neumorphic-sm"
+            className="w-9 h-9 rounded-full bg-primary flex items-center justify-center"
             aria-label={showForm ? 'Close form' : 'New prayer request'}
           >
             {showForm ? <X className="w-4 h-4 text-primary-foreground" /> : <Plus className="w-4 h-4 text-primary-foreground" />}
           </button>
-        }
+        ) : null}
       />
 
       <div className="p-4 space-y-4">
         <AnimatePresence>
-          {showForm && (
+          {showForm && isAdmin && (
             <motion.div
               initial={{ opacity: 0, height: 0 }}
               animate={{ opacity: 1, height: 'auto' }}

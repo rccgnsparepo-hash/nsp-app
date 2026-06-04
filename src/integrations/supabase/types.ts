@@ -602,6 +602,7 @@ export type Database = {
           phone_number: string | null
           profile_image_url: string | null
           theme_preference: string | null
+          tour_completed: boolean
         }
         Insert: {
           bio?: string | null
@@ -613,6 +614,7 @@ export type Database = {
           phone_number?: string | null
           profile_image_url?: string | null
           theme_preference?: string | null
+          tour_completed?: boolean
         }
         Update: {
           bio?: string | null
@@ -624,6 +626,7 @@ export type Database = {
           phone_number?: string | null
           profile_image_url?: string | null
           theme_preference?: string | null
+          tour_completed?: boolean
         }
         Relationships: []
       }

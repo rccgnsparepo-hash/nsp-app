@@ -10,7 +10,7 @@ import AppLayout from '@/components/AppLayout';
 import AppHeader from '@/components/AppHeader';
 import AttendanceSection from '@/components/AttendanceSection';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Camera, LogOut, User as UserIcon, ClipboardCheck } from 'lucide-react';
+import { Camera, LogOut, User as UserIcon, ClipboardCheck, KeyRound } from 'lucide-react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 
 const ProfilePage = () => {
@@ -56,6 +56,15 @@ const ProfilePage = () => {
     } finally {
       setSaving(false);
     }
+  };
+
+  const handleSendReset = async () => {
+    if (!user?.email) { toast.error('No email on this account'); return; }
+    const { error } = await supabase.auth.resetPasswordForEmail(user.email, {
+      redirectTo: `${window.location.origin}/reset-password`,
+    });
+    if (error) toast.error(error.message);
+    else toast.success('Password reset link sent to your email.');
   };
 
   const handleSignOut = async () => {
@@ -147,6 +156,19 @@ const ProfilePage = () => {
                   </div>
                 </div>
               )}
+            </div>
+
+            <div className="rounded-2xl p-4 bg-card border border-border space-y-3">
+              <div className="flex items-center gap-2">
+                <KeyRound className="w-4 h-4 text-primary" />
+                <h3 className="font-semibold text-foreground text-sm">Account recovery</h3>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                We'll email you a secure link to set a new password.
+              </p>
+              <Button onClick={handleSendReset} variant="outline" className="w-full rounded-xl">
+                Send password reset email
+              </Button>
             </div>
 
             <Button

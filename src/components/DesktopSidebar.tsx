@@ -3,20 +3,19 @@ import { motion } from 'framer-motion';
 import { Home, HandHeart, Image as ImageIcon, User, MessageCircle, Settings, LayoutDashboard, Newspaper } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 
-const items = [
-  { path: '/', icon: Home, label: 'Home' },
-  { path: '/chats', icon: MessageCircle, label: 'Chats' },
-  { path: '/prayer', icon: HandHeart, label: 'Prayer' },
-  { path: '/gallery', icon: ImageIcon, label: 'Gallery' },
-  { path: '/news', icon: Newspaper, label: 'News' },
-  { path: '/profile', icon: User, label: 'Profile' },
-  { path: '/settings', icon: Settings, label: 'Settings' },
-];
-
 const DesktopSidebar = () => {
   const { pathname } = useLocation();
   const navigate = useNavigate();
   const { isAdmin, profile } = useAuth();
+  const items = [
+    { path: '/', icon: Home, label: 'Home' },
+    { path: '/chats', icon: MessageCircle, label: 'Chats' },
+    ...(isAdmin ? [{ path: '/prayer', icon: HandHeart, label: 'Prayer' }] : []),
+    { path: '/gallery', icon: ImageIcon, label: 'Gallery' },
+    { path: '/news', icon: Newspaper, label: 'News' },
+    { path: '/profile', icon: User, label: 'Profile' },
+    { path: '/settings', icon: Settings, label: 'Settings' },
+  ];
   const all = isAdmin ? [...items, { path: '/admin', icon: LayoutDashboard, label: 'Admin' }] : items;
 
   return (

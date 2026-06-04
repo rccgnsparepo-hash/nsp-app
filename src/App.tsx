@@ -23,6 +23,7 @@ import InboxPage from "./pages/InboxPage";
 import UserProfilePage from "./pages/UserProfilePage";
 import NewsFeedPage from "./pages/NewsFeedPage";
 import IframeReaderPage from "./pages/IframeReaderPage";
+import ResetPassword from "./pages/ResetPassword";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -48,11 +49,19 @@ const AuthRoute = ({ children }: { children: React.ReactNode }) => {
   return <>{children}</>;
 };
 
+const AdminOnlyPrayer = () => {
+  const { isAdmin, loading } = useAuth();
+  if (loading) return null;
+  // Non-admins can still view the page, but only admins can create. The page itself enforces this.
+  return <PrayerPage />;
+};
+
 const AppRoutes = () => (
   <Routes>
     <Route path="/auth" element={<AuthRoute><Auth /></AuthRoute>} />
+    <Route path="/reset-password" element={<ResetPassword />} />
     <Route path="/" element={<ProtectedRoute><HomePage /></ProtectedRoute>} />
-    <Route path="/prayer" element={<ProtectedRoute><PrayerPage /></ProtectedRoute>} />
+    <Route path="/prayer" element={<ProtectedRoute><AdminOnlyPrayer /></ProtectedRoute>} />
     <Route path="/gallery" element={<ProtectedRoute><GalleryPage /></ProtectedRoute>} />
     <Route path="/profile" element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
      <Route path="/admin" element={<ProtectedRoute><AdminPage /></ProtectedRoute>} />
