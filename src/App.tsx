@@ -49,6 +49,13 @@ const AuthRoute = ({ children }: { children: React.ReactNode }) => {
   return <>{children}</>;
 };
 
+const AdminOnlyPrayer = () => {
+  const { isAdmin, loading } = useAuth();
+  if (loading) return null;
+  // Non-admins can still view the page, but only admins can create. The page itself enforces this.
+  return <PrayerPage />;
+};
+
 const AppRoutes = () => (
   <Routes>
     <Route path="/auth" element={<AuthRoute><Auth /></AuthRoute>} />
