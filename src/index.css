@@ -36,13 +36,8 @@
 
     --radius: 1rem;
 
-    /* Custom tokens */
     --whatsapp-green: 142 55% 40%;
-    --whatsapp-light-green: 142 55% 95%;
-    --whatsapp-dark: 220 20% 10%;
     --whatsapp-chat-bg: 210 20% 97%;
-    --neumorphic-shadow-light: 0 0% 100%;
-    --neumorphic-shadow-dark: 220 15% 85%;
     --tab-bar-bg: 0 0% 98%;
 
     --sidebar-background: 0 0% 98%;
@@ -96,44 +91,49 @@
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
   }
+
+  /* Global removal of every box-shadow (flat aesthetic per request) */
+  *, *::before, *::after {
+    box-shadow: none !important;
+    -webkit-box-shadow: none !important;
+  }
+
+  /* Snappy 3D press feedback on every interactive button */
+  button, [role="button"], a.btn {
+    transition: transform 160ms cubic-bezier(.2,.7,.2,1.4), filter 160ms ease;
+    transform-origin: center;
+    will-change: transform;
+  }
+  button:active, [role="button"]:active {
+    transform: perspective(420px) translateZ(-6px) scale(0.94) rotateX(6deg);
+    filter: brightness(0.96);
+  }
+  @media (hover: hover) {
+    button:hover:not(:disabled), [role="button"]:hover:not(:disabled) {
+      transform: perspective(420px) translateZ(2px) scale(1.015);
+    }
+  }
 }
 
 @layer utilities {
-  .neumorphic {
-    box-shadow: 
-      6px 6px 12px hsl(var(--neumorphic-shadow-dark) / 0.15),
-      -6px -6px 12px hsl(var(--neumorphic-shadow-light) / 0.8);
-  }
-  .neumorphic-inset {
-    box-shadow: 
-      inset 4px 4px 8px hsl(var(--neumorphic-shadow-dark) / 0.12),
-      inset -4px -4px 8px hsl(var(--neumorphic-shadow-light) / 0.8);
-  }
-  .neumorphic-sm {
-    box-shadow: 
-      3px 3px 6px hsl(var(--neumorphic-shadow-dark) / 0.1),
-      -3px -3px 6px hsl(var(--neumorphic-shadow-light) / 0.7);
-  }
+  /* Neumorphic helpers — kept as no-ops so existing markup still compiles */
+  .neumorphic, .neumorphic-inset, .neumorphic-sm { box-shadow: none !important; }
+
   .glass {
     backdrop-filter: blur(20px) saturate(180%);
     -webkit-backdrop-filter: blur(20px) saturate(180%);
     background: hsl(var(--card) / 0.72);
   }
-  .safe-bottom {
-    padding-bottom: env(safe-area-inset-bottom, 0px);
+  .safe-bottom { padding-bottom: env(safe-area-inset-bottom, 0px); }
+  .safe-top { padding-top: env(safe-area-inset-top, 0px); }
+  .no-scrollbar { scrollbar-width: none; -ms-overflow-style: none; }
+  .no-scrollbar::-webkit-scrollbar { display: none; width: 0; height: 0; }
+
+  .tilt-card {
+    transition: transform 220ms cubic-bezier(.2,.7,.2,1.4);
+    transform-style: preserve-3d;
   }
-  .safe-top {
-    padding-top: env(safe-area-inset-top, 0px);
-  }
-  .no-scrollbar {
-    scrollbar-width: none;
-    -ms-overflow-style: none;
-  }
-  .no-scrollbar::-webkit-scrollbar {
-    display: none;
-    width: 0;
-    height: 0;
-  }
+  .tilt-card:active { transform: perspective(700px) rotateX(4deg) rotateY(-2deg) scale(0.985); }
 }
 
 /* Chat doodle background */
