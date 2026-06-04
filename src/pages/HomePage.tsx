@@ -9,7 +9,7 @@ import { useResources } from '@/hooks/useResources';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 
-import { Cake, FileDown, Link2, ExternalLink, Trash2 } from 'lucide-react';
+import { Cake, FileDown, Link2, ExternalLink, Trash2, Rocket } from 'lucide-react';
 import AppLayout from '@/components/AppLayout';
 import AppHeader from '@/components/AppHeader';
 import YoutubeEmbed from '@/components/YoutubeEmbed';
@@ -103,7 +103,30 @@ const HomePage = () => {
       <AppHeader title="NSP App" />
 
       <div className="p-4 space-y-4">
-        {/* Birthday Banner */}
+        {/* FARATECH coming soon */}
+        <motion.div
+          initial={{ opacity: 0, y: 20, rotateX: -8 }}
+          animate={{ opacity: 1, y: 0, rotateX: 0 }}
+          whileHover={{ rotateX: 4, rotateY: -3, scale: 1.01 }}
+          transition={{ type: 'spring', stiffness: 220, damping: 22 }}
+          style={{ transformPerspective: 900 }}
+          className="relative overflow-hidden rounded-2xl p-5 bg-gradient-to-br from-primary/90 via-primary to-emerald-700 text-primary-foreground"
+        >
+          <div className="absolute -right-6 -top-6 w-32 h-32 rounded-full bg-white/10 blur-2xl" />
+          <div className="flex items-start gap-3 relative">
+            <div className="w-11 h-11 rounded-2xl bg-white/15 backdrop-blur flex items-center justify-center flex-shrink-0">
+              <Rocket className="w-5 h-5" />
+            </div>
+            <div className="flex-1">
+              <p className="text-[10px] uppercase tracking-widest opacity-80">From FARATECH</p>
+              <h3 className="text-lg font-bold mt-0.5">Multi-tenant model coming soon</h3>
+              <p className="text-sm opacity-90 mt-1 leading-relaxed">
+                Run your own community on this platform — branded, isolated, and ready to scale. Stay tuned.
+              </p>
+            </div>
+          </div>
+        </motion.div>
+
         {todayBirthdays.length > 0 && (
           <motion.div
             initial={{ opacity: 0, scale: 0.95 }}

@@ -10,7 +10,7 @@ import AppLayout from '@/components/AppLayout';
 import AppHeader from '@/components/AppHeader';
 import AttendanceSection from '@/components/AttendanceSection';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Camera, LogOut, User as UserIcon, ClipboardCheck } from 'lucide-react';
+import { Camera, LogOut, User as UserIcon, ClipboardCheck, KeyRound } from 'lucide-react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 
 const ProfilePage = () => {
@@ -56,6 +56,15 @@ const ProfilePage = () => {
     } finally {
       setSaving(false);
     }
+  };
+
+  const handleSendReset = async () => {
+    if (!user?.email) { toast.error('No email on this account'); return; }
+    const { error } = await supabase.auth.resetPasswordForEmail(user.email, {
+      redirectTo: `${window.location.origin}/reset-password`,
+    });
+    if (error) toast.error(error.message);
+    else toast.success('Password reset link sent to your email.');
   };
 
   const handleSignOut = async () => {
