@@ -22,7 +22,19 @@ const Auth = () => {
   const [loading, setLoading] = useState(false);
   const [isAdminMode, setIsAdminMode] = useState(false);
   const [adminKey, setAdminKey] = useState('');
+  const [sendingReset, setSendingReset] = useState(false);
   const navigate = useNavigate();
+
+  const handleForgotPassword = async () => {
+    if (!email.trim()) { toast.error('Enter your email first'); return; }
+    setSendingReset(true);
+    const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
+      redirectTo: `${window.location.origin}/reset-password`,
+    });
+    setSendingReset(false);
+    if (error) { toast.error(error.message); return; }
+    toast.success('Password reset link sent. Check your inbox.');
+  };
 
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -288,13 +300,27 @@ const Auth = () => {
 
           <div className="mt-4 space-y-2 text-center">
             <button
+              type="button"
               onClick={() => setIsLogin(!isLogin)}
               className="text-primary text-sm font-medium"
             >
               {isLogin ? "Don't have an account? Sign Up" : 'Already have an account? Sign In'}
             </button>
+            {isLogin && (
+              <div>
+                <button
+                  type="button"
+                  onClick={handleForgotPassword}
+                  disabled={sendingReset}
+                  className="text-muted-foreground text-xs underline-offset-2 hover:underline"
+                >
+                  {sendingReset ? 'Sending…' : 'Forgot password?'}
+                </button>
+              </div>
+            )}
             <div>
               <button
+                type="button"
                 onClick={() => setIsAdminMode(!isAdminMode)}
                 className="text-muted-foreground text-xs flex items-center gap-1 mx-auto"
               >
