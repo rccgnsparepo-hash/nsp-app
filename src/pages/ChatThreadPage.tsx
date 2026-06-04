@@ -112,14 +112,20 @@ const ChatThreadPage = () => {
   }, [user, userId, channelName]);
 
   useEffect(() => {
-    if (!scrollRef.current) return;
-    // First paint after messages load: jump instantly to bottom (no glitch / no animation)
-    if (!didInitialScrollRef.current && messages.length > 0) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    const el = scrollRef.current;
+    if (!el) return;
+    // Always pin to bottom; use rAF so layout (images, bubbles) is settled.
+    const jump = () => { el.scrollTop = el.scrollHeight; };
+    requestAnimationFrame(() => {
+      jump();
+      // Second pass after any late layout (fonts, async media metadata)
+      requestAnimationFrame(jump);
+    });
+    if (didInitialScrollRef.current) {
+      el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
+    } else if (messages.length > 0) {
       didInitialScrollRef.current = true;
-      return;
     }
-    scrollRef.current.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
   }, [messages, otherTyping]);
 
   const broadcastTyping = (event: 'typing' | 'stop_typing') => {

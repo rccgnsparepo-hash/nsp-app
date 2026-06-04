@@ -23,6 +23,7 @@ import InboxPage from "./pages/InboxPage";
 import UserProfilePage from "./pages/UserProfilePage";
 import NewsFeedPage from "./pages/NewsFeedPage";
 import IframeReaderPage from "./pages/IframeReaderPage";
+import ResetPassword from "./pages/ResetPassword";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -51,6 +52,7 @@ const AuthRoute = ({ children }: { children: React.ReactNode }) => {
 const AppRoutes = () => (
   <Routes>
     <Route path="/auth" element={<AuthRoute><Auth /></AuthRoute>} />
+    <Route path="/reset-password" element={<ResetPassword />} />
     <Route path="/" element={<ProtectedRoute><HomePage /></ProtectedRoute>} />
     <Route path="/prayer" element={<ProtectedRoute><PrayerPage /></ProtectedRoute>} />
     <Route path="/gallery" element={<ProtectedRoute><GalleryPage /></ProtectedRoute>} />
