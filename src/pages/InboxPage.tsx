@@ -130,7 +130,7 @@ const InboxPage = () => {
 
   const open = async (n: any) => {
     await supabase.from('notifications')
-      .update({ read: true, read_at: new Date().toISOString(), clicked_at: new Date().toISOString() })
+      .update({ read: true, read_at: new Date().toISOString(), clicked_at: new Date().toISOString() } as any)
       .in('id', n._ids ?? [n.id]);
     qc.invalidateQueries({ queryKey: ['inbox', user?.id] });
 
