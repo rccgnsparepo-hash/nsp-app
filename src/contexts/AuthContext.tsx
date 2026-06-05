@@ -1,7 +1,7 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
-import { initOneSignal, linkUserToPush, logoutOneSignal, requestPushPermission } from '@/lib/onesignal';
+import { initOneSignal, linkUserToPush, logoutOneSignal } from '@/lib/onesignal';
 
 interface AuthContextType {
   user: User | null;
