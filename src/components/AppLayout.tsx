@@ -4,6 +4,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import BottomTabBar from './BottomTabBar';
 import DesktopSidebar from './DesktopSidebar';
 import OnboardingTour from './OnboardingTour';
+import SoftPushPrompt from './SoftPushPrompt';
 import { useAuth } from '@/contexts/AuthContext';
 
 const AppLayout = ({ children }: { children: ReactNode }) => {
