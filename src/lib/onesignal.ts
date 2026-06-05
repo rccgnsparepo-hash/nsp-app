@@ -50,7 +50,16 @@ const upsertSubscription = async (userId: string, playerId: string) => {
     const { error } = await supabase
       .from("user_push_subscriptions")
       .upsert(
-        { user_id: userId, player_id: playerId, platform: "web", updated_at: new Date().toISOString() },
+        {
+          user_id: userId,
+          player_id: playerId,
+          platform: "web",
+          user_agent: typeof navigator !== "undefined" ? navigator.userAgent.slice(0, 500) : null,
+          last_seen_at: new Date().toISOString(),
+          revoked_at: null,
+          failure_count: 0,
+          updated_at: new Date().toISOString(),
+        },
         { onConflict: "user_id,player_id" },
       );
     if (error) warn("upsert subscription failed", error);
