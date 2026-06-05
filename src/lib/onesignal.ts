@@ -114,6 +114,27 @@ export const initOneSignal = async (): Promise<void> => {
           } catch (e) {
             warn("attach change listener failed", e);
           }
+
+          // Deep-link routing: when a user clicks a push, open the right page in-app
+          try {
+            OneSignal.Notifications.addEventListener("click", (ev: any) => {
+              const data = ev?.notification?.additionalData ?? ev?.result?.notification?.additionalData ?? {};
+              const url: string | undefined = data?.url || ev?.notification?.launchURL || ev?.result?.url;
+              if (url && typeof url === "string") {
+                try {
+                  const u = new URL(url, window.location.origin);
+                  if (u.origin === window.location.origin) {
+                    window.history.pushState({}, "", u.pathname + u.search + u.hash);
+                    window.dispatchEvent(new PopStateEvent("popstate"));
+                  } else {
+                    window.location.href = url;
+                  }
+                } catch { window.location.href = url; }
+              }
+            });
+          } catch (e) {
+            warn("attach click listener failed", e);
+          }
         } catch (e) {
           warn("init error", e);
         } finally {
