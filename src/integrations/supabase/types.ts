@@ -186,6 +186,130 @@ export type Database = {
         }
         Relationships: []
       }
+      communities: {
+        Row: {
+          avatar_url: string | null
+          created_at: string
+          description: string | null
+          id: string
+          name: string
+          owner_id: string
+          slug: string
+          updated_at: string
+        }
+        Insert: {
+          avatar_url?: string | null
+          created_at?: string
+          description?: string | null
+          id?: string
+          name: string
+          owner_id: string
+          slug: string
+          updated_at?: string
+        }
+        Update: {
+          avatar_url?: string | null
+          created_at?: string
+          description?: string | null
+          id?: string
+          name?: string
+          owner_id?: string
+          slug?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      community_invites: {
+        Row: {
+          community_id: string
+          created_at: string
+          id: string
+          invited_by: string
+          invited_user_id: string
+          status: string
+        }
+        Insert: {
+          community_id: string
+          created_at?: string
+          id?: string
+          invited_by: string
+          invited_user_id: string
+          status?: string
+        }
+        Update: {
+          community_id?: string
+          created_at?: string
+          id?: string
+          invited_by?: string
+          invited_user_id?: string
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "community_invites_community_id_fkey"
+            columns: ["community_id"]
+            isOneToOne: false
+            referencedRelation: "communities"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      community_members: {
+        Row: {
+          community_id: string
+          created_at: string
+          id: string
+          role: string
+          user_id: string
+        }
+        Insert: {
+          community_id: string
+          created_at?: string
+          id?: string
+          role?: string
+          user_id: string
+        }
+        Update: {
+          community_id?: string
+          created_at?: string
+          id?: string
+          role?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "community_members_community_id_fkey"
+            columns: ["community_id"]
+            isOneToOne: false
+            referencedRelation: "communities"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      creator_milestones: {
+        Row: {
+          achieved_at: string
+          id: string
+          kind: string
+          user_id: string
+          value: number
+        }
+        Insert: {
+          achieved_at?: string
+          id?: string
+          kind: string
+          user_id: string
+          value: number
+        }
+        Update: {
+          achieved_at?: string
+          id?: string
+          kind?: string
+          user_id?: string
+          value?: number
+        }
+        Relationships: []
+      }
       direct_messages: {
         Row: {
           content: string | null
@@ -228,6 +352,30 @@ export type Database = {
         }
         Relationships: []
       }
+      follows: {
+        Row: {
+          created_at: string
+          follower_id: string
+          following_id: string
+          id: string
+          status: string
+        }
+        Insert: {
+          created_at?: string
+          follower_id: string
+          following_id: string
+          id?: string
+          status?: string
+        }
+        Update: {
+          created_at?: string
+          follower_id?: string
+          following_id?: string
+          id?: string
+          status?: string
+        }
+        Relationships: []
+      }
       gallery: {
         Row: {
           caption: string | null
@@ -248,6 +396,53 @@ export type Database = {
           image_url?: string
         }
         Relationships: []
+      }
+      live_sessions: {
+        Row: {
+          community_id: string | null
+          created_at: string
+          ended_at: string | null
+          host_id: string
+          id: string
+          kind: string
+          room_url: string | null
+          started_at: string | null
+          starts_at: string | null
+          title: string
+        }
+        Insert: {
+          community_id?: string | null
+          created_at?: string
+          ended_at?: string | null
+          host_id: string
+          id?: string
+          kind?: string
+          room_url?: string | null
+          started_at?: string | null
+          starts_at?: string | null
+          title: string
+        }
+        Update: {
+          community_id?: string | null
+          created_at?: string
+          ended_at?: string | null
+          host_id?: string
+          id?: string
+          kind?: string
+          room_url?: string | null
+          started_at?: string | null
+          starts_at?: string | null
+          title?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "live_sessions_community_id_fkey"
+            columns: ["community_id"]
+            isOneToOne: false
+            referencedRelation: "communities"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       memes_cache: {
         Row: {
@@ -399,35 +594,104 @@ export type Database = {
         }
         Relationships: []
       }
-      notifications: {
+      notification_group_queue: {
         Row: {
+          actor_id: string | null
           body: string
           created_at: string
           data: Json
+          flush_at: string
+          flushed_at: string | null
+          group_key: string
           id: string
-          kind: string
-          read: boolean
           title: string
+          url: string | null
           user_id: string
         }
         Insert: {
+          actor_id?: string | null
           body: string
           created_at?: string
           data?: Json
+          flush_at?: string
+          flushed_at?: string | null
+          group_key: string
           id?: string
-          kind?: string
-          read?: boolean
           title: string
+          url?: string | null
           user_id: string
         }
         Update: {
+          actor_id?: string | null
           body?: string
           created_at?: string
           data?: Json
+          flush_at?: string
+          flushed_at?: string | null
+          group_key?: string
+          id?: string
+          title?: string
+          url?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      notifications: {
+        Row: {
+          actor_id: string | null
+          body: string
+          clicked_at: string | null
+          created_at: string
+          data: Json
+          dedupe_id: string | null
+          delivered_at: string | null
+          entity_id: string | null
+          entity_type: string | null
+          group_key: string | null
+          id: string
+          kind: string
+          read: boolean
+          read_at: string | null
+          title: string
+          url: string | null
+          user_id: string
+        }
+        Insert: {
+          actor_id?: string | null
+          body: string
+          clicked_at?: string | null
+          created_at?: string
+          data?: Json
+          dedupe_id?: string | null
+          delivered_at?: string | null
+          entity_id?: string | null
+          entity_type?: string | null
+          group_key?: string | null
           id?: string
           kind?: string
           read?: boolean
+          read_at?: string | null
+          title: string
+          url?: string | null
+          user_id: string
+        }
+        Update: {
+          actor_id?: string | null
+          body?: string
+          clicked_at?: string | null
+          created_at?: string
+          data?: Json
+          dedupe_id?: string | null
+          delivered_at?: string | null
+          entity_id?: string | null
+          entity_type?: string | null
+          group_key?: string | null
+          id?: string
+          kind?: string
+          read?: boolean
+          read_at?: string | null
           title?: string
+          url?: string | null
           user_id?: string
         }
         Relationships: []
@@ -496,6 +760,38 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "post_likes_post_id_fkey"
+            columns: ["post_id"]
+            isOneToOne: false
+            referencedRelation: "posts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      post_reposts: {
+        Row: {
+          created_at: string
+          id: string
+          post_id: string
+          quote_content: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          post_id: string
+          quote_content?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          post_id?: string
+          quote_content?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "post_reposts_post_id_fkey"
             columns: ["post_id"]
             isOneToOne: false
             referencedRelation: "posts"
@@ -657,6 +953,136 @@ export type Database = {
         }
         Relationships: []
       }
+      scheduled_notifications: {
+        Row: {
+          body: string
+          created_at: string
+          created_by: string
+          id: string
+          segment: Json
+          send_at: string
+          sent_at: string | null
+          status: string
+          title: string
+          url: string | null
+        }
+        Insert: {
+          body: string
+          created_at?: string
+          created_by: string
+          id?: string
+          segment?: Json
+          send_at: string
+          sent_at?: string | null
+          status?: string
+          title: string
+          url?: string | null
+        }
+        Update: {
+          body?: string
+          created_at?: string
+          created_by?: string
+          id?: string
+          segment?: Json
+          send_at?: string
+          sent_at?: string | null
+          status?: string
+          title?: string
+          url?: string | null
+        }
+        Relationships: []
+      }
+      stories: {
+        Row: {
+          caption: string | null
+          created_at: string
+          expires_at: string
+          id: string
+          media_type: string
+          media_url: string
+          user_id: string
+        }
+        Insert: {
+          caption?: string | null
+          created_at?: string
+          expires_at?: string
+          id?: string
+          media_type?: string
+          media_url: string
+          user_id: string
+        }
+        Update: {
+          caption?: string | null
+          created_at?: string
+          expires_at?: string
+          id?: string
+          media_type?: string
+          media_url?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      story_reactions: {
+        Row: {
+          created_at: string
+          id: string
+          reaction: string
+          story_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          reaction: string
+          story_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          reaction?: string
+          story_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "story_reactions_story_id_fkey"
+            columns: ["story_id"]
+            isOneToOne: false
+            referencedRelation: "stories"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      story_views: {
+        Row: {
+          created_at: string
+          id: string
+          story_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          story_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          story_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "story_views_story_id_fkey"
+            columns: ["story_id"]
+            isOneToOne: false
+            referencedRelation: "stories"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       user_badges: {
         Row: {
           awarded_at: string
@@ -681,26 +1107,38 @@ export type Database = {
       user_push_subscriptions: {
         Row: {
           created_at: string
+          failure_count: number
           id: string
+          last_seen_at: string | null
           platform: string
           player_id: string
+          revoked_at: string | null
           updated_at: string
+          user_agent: string | null
           user_id: string
         }
         Insert: {
           created_at?: string
+          failure_count?: number
           id?: string
+          last_seen_at?: string | null
           platform?: string
           player_id: string
+          revoked_at?: string | null
           updated_at?: string
+          user_agent?: string | null
           user_id: string
         }
         Update: {
           created_at?: string
+          failure_count?: number
           id?: string
+          last_seen_at?: string | null
           platform?: string
           player_id?: string
+          revoked_at?: string | null
           updated_at?: string
+          user_agent?: string | null
           user_id?: string
         }
         Relationships: []
@@ -761,6 +1199,22 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      enqueue_notification: {
+        Args: {
+          _actor_id: string
+          _body: string
+          _data: Json
+          _dedupe_id: string
+          _entity_id: string
+          _entity_type: string
+          _group_key: string
+          _kind: string
+          _title: string
+          _url: string
+          _user_id: string
+        }
+        Returns: undefined
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
@@ -775,6 +1229,10 @@ export type Database = {
       invoke_push_to_user: {
         Args: { _body: string; _data: Json; _title: string; _user_id: string }
         Returns: undefined
+      }
+      is_community_admin: {
+        Args: { _community_id: string; _user_id: string }
+        Returns: boolean
       }
       notify_users: {
         Args: {
