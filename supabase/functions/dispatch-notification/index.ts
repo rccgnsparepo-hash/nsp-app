@@ -1,7 +1,12 @@
 // Edge function: dispatch-notification
-// Routes to one of 6 Zapier webhooks based on payload type.
-// Now forwards sender_name, sender_id, preview, thread_url, target_mode, voip as top-level
-// fields so Zapier mappings stay simple.
+// Primary push path: ALWAYS sends via OneSignal (send-notification) so push works
+// even when Zapier hooks are missing or fail. Also fires the legacy Zapier
+// channel routing for any downstream automations.
+//
+// Adds:
+// - dedupe_id → OneSignal web_push_topic (collapse key) + Notification.tag
+// - url       → OneSignal web_url / launch URL for deep linking
+// - parallel dispatch + structured logging
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 
@@ -19,15 +24,17 @@ interface Payload {
   message: string;
   data?: Record<string, unknown>;
   url?: string;
-  // optional enriched fields from DB triggers
+  dedupe_id?: string | null;
+  group_key?: string | null;
   sender_id?: string | null;
   sender_name?: string | null;
   preview?: string | null;
-  target_mode?: "external_user_ids" | "broadcast" | string;
+  target_mode?: string;
 }
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_ROLE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+const PRODUCTION_ORIGIN = "https://nsp-main-app.lovable.app";
 const admin = createClient(SUPABASE_URL, SERVICE_ROLE, {
   auth: { persistSession: false, autoRefreshToken: false },
 });
@@ -40,7 +47,7 @@ function pickChannel(data: Record<string, unknown> | undefined): ChannelKey {
   const type = String(data?.type ?? "general");
   const postType = String(data?.post_type ?? "");
   if (type === "message" || type === "call") return "chat";
-  if (type === "post_like" || type === "post_comment") return "chat"; // user-targeted
+  if (type === "post_like" || type === "post_comment" || type === "repost") return "chat";
   if (type === "prayer" || type === "prayer_interaction") return "prayer";
   if (type === "attendance_session" || type === "attendance_review" || type === "attendance_pending") return "attendance";
   if (type === "post") {
@@ -51,7 +58,7 @@ function pickChannel(data: Record<string, unknown> | undefined): ChannelKey {
   return "fallback";
 }
 
-function getWebhookForChannel(ch: ChannelKey): string | null {
+function getZapierWebhook(ch: ChannelKey): string | null {
   const map: Record<ChannelKey, string | undefined> = {
     chat: Deno.env.get("ZAPIER_WEBHOOK_CHAT"),
     gallery_post: Deno.env.get("ZAPIER_WEBHOOK_GALLERY_POST"),
@@ -64,119 +71,152 @@ function getWebhookForChannel(ch: ChannelKey): string | null {
   return map[ch] ?? null;
 }
 
+function absoluteUrl(maybe: string | null | undefined): string {
+  if (!maybe) return PRODUCTION_ORIGIN + "/inbox";
+  if (maybe.startsWith("http")) return maybe;
+  return PRODUCTION_ORIGIN + (maybe.startsWith("/") ? maybe : "/" + maybe);
+}
+
+async function callOneSignal(body: Payload, dedupeId: string | null, deepLink: string): Promise<{ ok: boolean; result: unknown; status: number }> {
+  const ONESIGNAL_APP_ID = Deno.env.get("ONESIGNAL_APP_ID");
+  const ONESIGNAL_REST_API_KEY = Deno.env.get("ONESIGNAL_REST_API_KEY");
+  if (!ONESIGNAL_APP_ID || !ONESIGNAL_REST_API_KEY) {
+    return { ok: false, result: { error: "missing OneSignal env" }, status: 500 };
+  }
+
+  const payload: Record<string, unknown> = {
+    app_id: ONESIGNAL_APP_ID,
+    headings: { en: body.title },
+    contents: { en: body.message },
+    data: { ...(body.data ?? {}), url: deepLink, dedupe_id: dedupeId },
+    web_url: deepLink,
+    url: deepLink,
+  };
+
+  if (dedupeId) {
+    // Collapse re-sends of the same logical event on web/Android
+    payload.web_push_topic = dedupeId.slice(0, 40);
+    payload.collapse_id = dedupeId.slice(0, 40);
+  }
+
+  if (body.broadcast) {
+    payload.included_segments = ["Subscribed Users", "All"];
+  } else if (body.userIds?.length) {
+    payload.include_external_user_ids = body.userIds;
+    payload.include_aliases = { external_id: body.userIds };
+    payload.target_channel = "push";
+    payload.channel_for_external_user_ids = "push";
+  } else if (body.playerIds?.length) {
+    payload.include_player_ids = body.playerIds;
+  } else {
+    return { ok: false, result: { error: "no recipients" }, status: 400 };
+  }
+
+  // Retry up to 3 times with backoff
+  let lastErr: unknown = null;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      const res = await fetch("https://onesignal.com/api/v1/notifications", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Basic ${ONESIGNAL_REST_API_KEY}`,
+        },
+        body: JSON.stringify(payload),
+      });
+      const result = await res.json().catch(() => ({}));
+      if (res.ok && !(result as any)?.errors) {
+        return { ok: true, result, status: res.status };
+      }
+      lastErr = result;
+      if (res.status < 500) return { ok: false, result, status: res.status };
+    } catch (e) { lastErr = (e as Error).message; }
+    await new Promise(r => setTimeout(r, 250 * Math.pow(2, attempt)));
+  }
+  return { ok: false, result: lastErr, status: 500 };
+}
+
+async function fireZapier(channel: ChannelKey, body: Payload, deepLink: string) {
+  const hook = getZapierWebhook(channel);
+  if (!hook) return null;
+  try {
+    const res = await fetch(hook, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        type: (body.data as any)?.type ?? "general",
+        channel,
+        title: body.title,
+        body: body.message,
+        message: body.message,
+        preview: body.preview ?? body.message,
+        url: deepLink,
+        thread_url: deepLink,
+        sender_id: body.sender_id ?? (body.data as any)?.sender_id ?? null,
+        sender_name: body.sender_name ?? (body.data as any)?.sender_name ?? null,
+        broadcast: !!body.broadcast,
+        userIds: body.userIds ?? [],
+        data: body.data ?? {},
+        sent_at: new Date().toISOString(),
+      }),
+    });
+    return { status: res.status, ok: res.ok };
+  } catch (e) {
+    return { status: 0, ok: false, error: (e as Error).message };
+  }
+}
+
 async function logDispatch(row: Record<string, unknown>) {
   try { await admin.from("notification_dispatch_logs").insert(row); }
   catch (e) { console.error("[dispatch] log threw", e); }
 }
 
-async function callFallback(body: Payload): Promise<Response> {
-  const res = await fetch(`${SUPABASE_URL}/functions/v1/send-notification`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", Authorization: `Bearer ${SERVICE_ROLE}`, apikey: SERVICE_ROLE },
-    body: JSON.stringify(body),
-  });
-  const data = await res.json().catch(() => ({}));
-  return new Response(JSON.stringify({ ok: res.ok, channel: "onesignal_fallback", data }), {
-    status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
-  });
-}
-
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
-
-  const url = new URL(req.url);
-  if (req.method === "GET" && url.searchParams.get("status") === "1") {
-    return new Response(JSON.stringify({
-      chat_configured: !!Deno.env.get("ZAPIER_WEBHOOK_CHAT"),
-      gallery_post_configured: !!Deno.env.get("ZAPIER_WEBHOOK_GALLERY_POST"),
-      voice_note_configured: !!Deno.env.get("ZAPIER_WEBHOOK_VOICE_NOTE"),
-      youtube_post_configured: !!Deno.env.get("ZAPIER_WEBHOOK_YOUTUBE_POST"),
-      prayer_configured: !!Deno.env.get("ZAPIER_WEBHOOK_PRAYER"),
-      attendance_configured: !!Deno.env.get("ZAPIER_WEBHOOK_ATTENDANCE"),
-    }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
-  }
 
   let body: Payload | null = null;
   try {
     body = (await req.json()) as Payload;
     if (!body?.title || !body?.message) {
-      return new Response(JSON.stringify({ error: "title and message are required" }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      return new Response(JSON.stringify({ error: "title and message required" }), {
+        status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
+    const dedupeId = body.dedupe_id ?? ((body.data as any)?.dedupe_id ?? null);
+    const deepLink = absoluteUrl(body.url ?? (body.data as any)?.url ?? (body.data as any)?.thread_url);
     const channel = pickChannel(body.data);
-    const webhook = getWebhookForChannel(channel);
 
     const target_type = body.broadcast ? "broadcast"
       : body.userIds?.length ? "external_user_ids"
       : body.playerIds?.length ? "player_ids" : "none";
     const target_value = body.broadcast ? ["Subscribed Users"] : body.userIds ?? body.playerIds ?? null;
-    const user_ids = body.userIds ?? null;
-    const type = (body.data as any)?.type ?? "general";
 
-    if (!webhook) {
-      await logDispatch({
-        title: body.title, body: body.message, target_type, target_value, user_ids,
-        status: "skipped", channel, error: `No webhook for ${channel}`,
-        request_payload: body as unknown as Record<string, unknown>,
-      });
-      return await callFallback(body);
-    }
-
-    // Top-level fields make Zapier mapping trivial: {{sender_name}}, {{preview}}, {{userIds}}…
-    const zapPayload = {
-      type,
-      channel,
-      title: body.title,
-      body: body.message,
-      message: body.message,
-      preview: body.preview ?? body.message,
-      sender_id: body.sender_id ?? (body.data as any)?.sender_id ?? null,
-      sender_name: body.sender_name ?? (body.data as any)?.sender_name ?? null,
-      thread_url: (body.data as any)?.thread_url ?? body.url ?? null,
-      target_mode: body.target_mode ?? (body.broadcast ? "broadcast" : "external_user_ids"),
-      voip: !!(body.data as any)?.voip,
-      broadcast: !!body.broadcast,
-      userIds: body.userIds ?? [],
-      playerIds: body.playerIds ?? [],
-      data: body.data ?? {},
-      url: body.url ?? null,
-      source: "nsp-main-app",
-      sent_at: new Date().toISOString(),
-    };
-
-    let zapStatus = 0; let zapText = "";
-    try {
-      const res = await fetch(webhook, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(zapPayload),
-      });
-      zapStatus = res.status;
-      zapText = await res.text();
-      if (res.ok) {
-        await logDispatch({
-          title: body.title, body: body.message, target_type, target_value, user_ids,
-          status: "sent", channel, recipients: body.broadcast ? null : (user_ids?.length ?? 0),
-          raw_response: { status: zapStatus, body: zapText.slice(0, 500) },
-          request_payload: zapPayload as unknown as Record<string, unknown>,
-        });
-        return new Response(JSON.stringify({ ok: true, channel, status: zapStatus }),
-          { headers: { ...corsHeaders, "Content-Type": "application/json" } });
-      }
-    } catch (e) { zapText = (e as Error).message; }
+    // Fire push + zapier in parallel
+    const [oneSignal, zapier] = await Promise.all([
+      callOneSignal(body, dedupeId, deepLink),
+      fireZapier(channel, body, deepLink),
+    ]);
 
     await logDispatch({
-      title: body.title, body: body.message, target_type, target_value, user_ids,
-      status: "zapier_failed", channel,
-      error: `Zapier HTTP ${zapStatus}: ${zapText.slice(0, 300)}`,
-      request_payload: zapPayload as unknown as Record<string, unknown>,
+      title: body.title, body: body.message, target_type, target_value,
+      user_ids: body.userIds ?? null,
+      recipients: (oneSignal.result as any)?.recipients ?? null,
+      onesignal_id: (oneSignal.result as any)?.id ?? null,
+      status: oneSignal.ok ? "sent" : "failed",
+      channel,
+      error: oneSignal.ok ? null : JSON.stringify(oneSignal.result).slice(0, 500),
+      raw_response: { onesignal: oneSignal.result, zapier },
+      request_payload: { ...body, dedupe_id: dedupeId, deepLink } as unknown as Record<string, unknown>,
     });
-    return await callFallback(body);
+
+    return new Response(JSON.stringify({
+      ok: oneSignal.ok, channel, onesignal: oneSignal.result, zapier,
+    }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
   } catch (e) {
     await logDispatch({
       title: body?.title ?? null, body: body?.message ?? null,
-      status: "exception", channel: "unknown", error: (e as Error).message,
+      status: "exception", error: (e as Error).message,
       request_payload: (body ?? {}) as unknown as Record<string, unknown>,
     });
     return new Response(JSON.stringify({ error: (e as Error).message }), {

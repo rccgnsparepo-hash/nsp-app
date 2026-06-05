@@ -50,7 +50,16 @@ const upsertSubscription = async (userId: string, playerId: string) => {
     const { error } = await supabase
       .from("user_push_subscriptions")
       .upsert(
-        { user_id: userId, player_id: playerId, platform: "web", updated_at: new Date().toISOString() },
+        {
+          user_id: userId,
+          player_id: playerId,
+          platform: "web",
+          user_agent: typeof navigator !== "undefined" ? navigator.userAgent.slice(0, 500) : null,
+          last_seen_at: new Date().toISOString(),
+          revoked_at: null,
+          failure_count: 0,
+          updated_at: new Date().toISOString(),
+        },
         { onConflict: "user_id,player_id" },
       );
     if (error) warn("upsert subscription failed", error);
@@ -104,6 +113,27 @@ export const initOneSignal = async (): Promise<void> => {
             });
           } catch (e) {
             warn("attach change listener failed", e);
+          }
+
+          // Deep-link routing: when a user clicks a push, open the right page in-app
+          try {
+            OneSignal.Notifications.addEventListener("click", (ev: any) => {
+              const data = ev?.notification?.additionalData ?? ev?.result?.notification?.additionalData ?? {};
+              const url: string | undefined = data?.url || ev?.notification?.launchURL || ev?.result?.url;
+              if (url && typeof url === "string") {
+                try {
+                  const u = new URL(url, window.location.origin);
+                  if (u.origin === window.location.origin) {
+                    window.history.pushState({}, "", u.pathname + u.search + u.hash);
+                    window.dispatchEvent(new PopStateEvent("popstate"));
+                  } else {
+                    window.location.href = url;
+                  }
+                } catch { window.location.href = url; }
+              }
+            });
+          } catch (e) {
+            warn("attach click listener failed", e);
           }
         } catch (e) {
           warn("init error", e);

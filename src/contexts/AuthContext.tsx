@@ -1,7 +1,7 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
-import { initOneSignal, linkUserToPush, logoutOneSignal, requestPushPermission } from '@/lib/onesignal';
+import { initOneSignal, linkUserToPush, logoutOneSignal } from '@/lib/onesignal';
 
 interface AuthContextType {
   user: User | null;
@@ -69,11 +69,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         setUser(session?.user ?? null);
         if (session?.user) {
           setTimeout(() => fetchProfile(session.user.id), 0);
+          // Link user to push if permission already granted — do NOT cold-prompt.
+          // SoftPushPrompt handles asking permission with a friendly UI first.
           setTimeout(async () => {
-            try {
-              await requestPushPermission();
-              await linkUserToPush(session.user.id, session.user.email);
-            } catch {}
+            try { await linkUserToPush(session.user.id, session.user.email); } catch {}
           }, 800);
         } else {
           setProfile(null);
@@ -89,10 +88,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       if (session?.user) {
         fetchProfile(session.user.id);
         setTimeout(async () => {
-          try {
-            await requestPushPermission();
-            await linkUserToPush(session.user.id, session.user.email);
-          } catch {}
+          try { await linkUserToPush(session.user.id, session.user.email); } catch {}
         }, 800);
       }
       setLoading(false);
