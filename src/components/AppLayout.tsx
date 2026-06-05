@@ -57,6 +57,7 @@ const AppLayout = ({ children }: { children: ReactNode }) => {
         <BottomTabBar />
       </div>
       <OnboardingTour />
+      <SoftPushPrompt />
     </div>
   );
 };
