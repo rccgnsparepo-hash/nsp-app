@@ -167,7 +167,7 @@ const InboxPage = () => {
   const markAllRead = async () => {
     if (!user) return;
     await supabase.from('notifications')
-      .update({ read: true, read_at: new Date().toISOString() })
+      .update({ read: true, read_at: new Date().toISOString() } as any)
       .eq('user_id', user.id).eq('read', false);
     qc.invalidateQueries({ queryKey: ['inbox', user.id] });
   };
