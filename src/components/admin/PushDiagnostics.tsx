@@ -93,7 +93,8 @@ const PushDiagnostics = () => {
     queryFn: async () => {
       const { data } = await supabase
         .from('user_push_subscriptions')
-        .select('user_id, player_id, platform, updated_at')
+        .select('user_id, endpoint, platform, updated_at')
+        .is('revoked_at', null)
         .order('updated_at', { ascending: false });
       return data ?? [];
     },
@@ -128,24 +129,26 @@ const PushDiagnostics = () => {
     setE2e('');
     try {
       const stamp = new Date().toISOString();
-      const { data, error } = await supabase.functions.invoke('send-notification', {
+      const { data, error } = await supabase.functions.invoke('dispatch-notification', {
         body: {
           broadcast: true,
-          title: '🧪 E2E test — production push',
-          message: `Verifying delivery from production at ${stamp}`,
+          title: '🧪 E2E test — Web Push',
+          message: `Native VAPID push at ${stamp}`,
           data: { type: 'e2e_test', stamp },
+          dedupe_id: 'e2e-' + stamp,
         },
       });
       if (error) throw error;
-      const recipients = data?.oneSignal?.recipients;
-      if (data?.ok && typeof recipients === 'number' && recipients > 0) {
-        setE2e(`✅ Delivered to ${recipients} subscriber(s). OneSignal id: ${data.oneSignal.id}`);
-        toast.success(`E2E push delivered to ${recipients} device(s)`);
-      } else if (data?.reason === 'no_subscribers') {
-        setE2e('⚠️ recipients = 0. No subscribed devices match. Visit https://nsp-main-app.vercel.app, accept push, then retry.');
+      const sent = data?.sent ?? 0;
+      const total = data?.total ?? 0;
+      if (sent > 0) {
+        setE2e(`✅ Delivered to ${sent} / ${total} active subscriber(s).`);
+        toast.success(`Push delivered to ${sent} device(s)`);
+      } else if (total === 0) {
+        setE2e('⚠️ No active subscriptions found. Accept push permission in this browser, then retry.');
         toast.warning('No subscribers found');
       } else {
-        setE2e(`❌ Unexpected response: ${JSON.stringify(data)}`);
+        setE2e(`❌ Sent to 0 of ${total}. ${JSON.stringify(data).slice(0, 200)}`);
         toast.error('E2E failed — see details');
       }
       await refetch();
@@ -196,33 +199,19 @@ const PushDiagnostics = () => {
 
       <div className="neumorphic rounded-2xl p-4 bg-card space-y-3">
         <div className="flex items-center justify-between">
-          <h3 className="font-semibold text-foreground">Direct OneSignal test (fallback)</h3>
+          <h3 className="font-semibold text-foreground">Direct VAPID Web Push test</h3>
           <Button size="sm" variant="outline" onClick={runE2E} disabled={running}>
             <Send className="w-3.5 h-3.5 mr-1" />{running ? 'Running…' : 'Run direct'}
           </Button>
         </div>
         <p className="text-xs text-muted-foreground">
-          Bypasses Zapier and calls OneSignal directly via send-notification.
+          Calls dispatch-notification and sends a broadcast via native Web Push (VAPID).
         </p>
         {e2e && (
           <pre className="text-[11px] bg-muted rounded p-2 whitespace-pre-wrap break-words">{e2e}</pre>
         )}
       </div>
 
-      <div className="neumorphic rounded-2xl p-4 bg-card space-y-3">
-        <div className="flex items-center justify-between">
-          <h3 className="font-semibold text-foreground">Direct OneSignal test (fallback)</h3>
-          <Button size="sm" variant="outline" onClick={runE2E} disabled={running}>
-            <Send className="w-3.5 h-3.5 mr-1" />{running ? 'Running…' : 'Run direct'}
-          </Button>
-        </div>
-        <p className="text-xs text-muted-foreground">
-          Bypasses Zapier and calls OneSignal directly via send-notification.
-        </p>
-        {e2e && (
-          <pre className="text-[11px] bg-muted rounded p-2 whitespace-pre-wrap break-words">{e2e}</pre>
-        )}
-      </div>
 
       <div className="neumorphic rounded-2xl p-4 bg-card space-y-3">
         <div className="flex items-center justify-between gap-2">

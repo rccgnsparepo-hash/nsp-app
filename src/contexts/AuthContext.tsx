@@ -1,7 +1,7 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
-import { initOneSignal, linkUserToPush, logoutOneSignal } from '@/lib/onesignal';
+import { registerServiceWorker, ensurePushSubscription, installPushNavListener, unsubscribePush } from '@/lib/webpush';
 
 interface AuthContextType {
   user: User | null;
@@ -61,7 +61,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   };
 
   useEffect(() => {
-    initOneSignal().catch(() => {});
+    registerServiceWorker().catch(() => {});
+    installPushNavListener();
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (_event, session) => {
@@ -69,10 +70,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         setUser(session?.user ?? null);
         if (session?.user) {
           setTimeout(() => fetchProfile(session.user.id), 0);
-          // Link user to push if permission already granted — do NOT cold-prompt.
-          // SoftPushPrompt handles asking permission with a friendly UI first.
+          // Silently refresh the VAPID push subscription if the user already
+          // granted permission. SoftPushPrompt asks for permission otherwise.
           setTimeout(async () => {
-            try { await linkUserToPush(session.user.id, session.user.email); } catch {}
+            try { await ensurePushSubscription(session.user.id); } catch {}
           }, 800);
         } else {
           setProfile(null);
@@ -88,7 +89,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       if (session?.user) {
         fetchProfile(session.user.id);
         setTimeout(async () => {
-          try { await linkUserToPush(session.user.id, session.user.email); } catch {}
+          try { await ensurePushSubscription(session.user.id); } catch {}
         }, 800);
       }
       setLoading(false);
@@ -98,7 +99,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   }, []);
 
   const signOut = async () => {
-    await logoutOneSignal();
+    if (user) { try { await unsubscribePush(user.id); } catch {} }
     await supabase.auth.signOut();
     setUser(null);
     setSession(null);

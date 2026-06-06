@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Bell, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/contexts/AuthContext';
-import { requestPushPermission, linkUserToPush } from '@/lib/onesignal';
+import { requestPushPermission, isPushSupported } from '@/lib/webpush';
 
 const STORAGE_KEY = 'nsp_push_prompt_dismissed_v2';
 const DELAY_MS = 8000;
@@ -14,10 +14,10 @@ const SoftPushPrompt = () => {
 
   useEffect(() => {
     if (!user) return;
-    if (typeof Notification === 'undefined') return;
+    if (!isPushSupported()) return;
     if (Notification.permission !== 'default') return;
     const dismissedAt = Number(localStorage.getItem(STORAGE_KEY) ?? 0);
-    if (dismissedAt && Date.now() - dismissedAt < 1000 * 60 * 60 * 24 * 3) return; // 3-day cooldown
+    if (dismissedAt && Date.now() - dismissedAt < 1000 * 60 * 60 * 24 * 3) return;
     const t = setTimeout(() => setOpen(true), DELAY_MS);
     return () => clearTimeout(t);
   }, [user]);
@@ -30,8 +30,7 @@ const SoftPushPrompt = () => {
   const accept = async () => {
     localStorage.setItem(STORAGE_KEY, String(Date.now()));
     setOpen(false);
-    const granted = await requestPushPermission();
-    if (granted && user) await linkUserToPush(user.id, user.email);
+    if (user) await requestPushPermission(user.id);
   };
 
   return (

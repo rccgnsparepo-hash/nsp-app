@@ -1106,36 +1106,48 @@ export type Database = {
       }
       user_push_subscriptions: {
         Row: {
+          auth: string | null
           created_at: string
+          endpoint: string | null
+          expiration_time: number | null
           failure_count: number
           id: string
           last_seen_at: string | null
+          p256dh: string | null
           platform: string
-          player_id: string
+          player_id: string | null
           revoked_at: string | null
           updated_at: string
           user_agent: string | null
           user_id: string
         }
         Insert: {
+          auth?: string | null
           created_at?: string
+          endpoint?: string | null
+          expiration_time?: number | null
           failure_count?: number
           id?: string
           last_seen_at?: string | null
+          p256dh?: string | null
           platform?: string
-          player_id: string
+          player_id?: string | null
           revoked_at?: string | null
           updated_at?: string
           user_agent?: string | null
           user_id: string
         }
         Update: {
+          auth?: string | null
           created_at?: string
+          endpoint?: string | null
+          expiration_time?: number | null
           failure_count?: number
           id?: string
           last_seen_at?: string | null
+          p256dh?: string | null
           platform?: string
-          player_id?: string
+          player_id?: string | null
           revoked_at?: string | null
           updated_at?: string
           user_agent?: string | null

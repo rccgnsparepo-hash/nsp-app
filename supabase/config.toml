@@ -6,8 +6,5 @@ verify_jwt = true
 [functions.send-notification]
 verify_jwt = false
 
-[functions.get-onesignal-config]
-verify_jwt = false
-
 [functions.dispatch-notification]
 verify_jwt = false
