@@ -1,14 +1,14 @@
 // Edge function: dispatch-notification
-// Primary push path: ALWAYS sends via OneSignal (send-notification) so push works
-// even when Zapier hooks are missing or fail. Also fires the legacy Zapier
-// channel routing for any downstream automations.
+// Native VAPID Web Push — replaces OneSignal entirely while preserving the
+// existing Zapier channel webhooks for downstream automations.
 //
-// Adds:
-// - dedupe_id → OneSignal web_push_topic (collapse key) + Notification.tag
-// - url       → OneSignal web_url / launch URL for deep linking
-// - parallel dispatch + structured logging
+// - Looks up active push subscriptions for target users (or all if broadcast)
+// - Sends encrypted Web Push notifications via the `web-push` library
+// - Marks failed subscriptions (410/404) as revoked
+// - Logs every dispatch to notification_dispatch_logs
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+import webpush from "npm:web-push@3.6.7";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -19,7 +19,6 @@ const corsHeaders = {
 interface Payload {
   broadcast?: boolean;
   userIds?: string[];
-  playerIds?: string[];
   title: string;
   message: string;
   data?: Record<string, unknown>;
@@ -29,12 +28,26 @@ interface Payload {
   sender_id?: string | null;
   sender_name?: string | null;
   preview?: string | null;
+  icon?: string | null;
+  image?: string | null;
+  // Backwards-compat (ignored)
+  playerIds?: string[];
   target_mode?: string;
 }
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_ROLE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-const PRODUCTION_ORIGIN = "https://nsp-main-app.lovable.app";
+const PRODUCTION_ORIGIN = "https://nsp-app.lovable.app";
+
+const VAPID_PUBLIC = Deno.env.get("VAPID_PUBLIC_KEY") ?? "";
+const VAPID_PRIVATE = Deno.env.get("VAPID_PRIVATE_KEY") ?? "";
+const VAPID_SUBJECT = Deno.env.get("VAPID_SUBJECT") ?? "mailto:admin@example.com";
+
+if (VAPID_PUBLIC && VAPID_PRIVATE) {
+  try { webpush.setVapidDetails(VAPID_SUBJECT, VAPID_PUBLIC, VAPID_PRIVATE); }
+  catch (e) { console.error("[dispatch] setVapidDetails failed", e); }
+}
+
 const admin = createClient(SUPABASE_URL, SERVICE_ROLE, {
   auth: { persistSession: false, autoRefreshToken: false },
 });
@@ -77,63 +90,62 @@ function absoluteUrl(maybe: string | null | undefined): string {
   return PRODUCTION_ORIGIN + (maybe.startsWith("/") ? maybe : "/" + maybe);
 }
 
-async function callOneSignal(body: Payload, dedupeId: string | null, deepLink: string): Promise<{ ok: boolean; result: unknown; status: number }> {
-  const ONESIGNAL_APP_ID = Deno.env.get("ONESIGNAL_APP_ID");
-  const ONESIGNAL_REST_API_KEY = Deno.env.get("ONESIGNAL_REST_API_KEY");
-  if (!ONESIGNAL_APP_ID || !ONESIGNAL_REST_API_KEY) {
-    return { ok: false, result: { error: "missing OneSignal env" }, status: 500 };
-  }
+type SubRow = { id: string; user_id: string; endpoint: string; p256dh: string; auth: string };
 
-  const payload: Record<string, unknown> = {
-    app_id: ONESIGNAL_APP_ID,
-    headings: { en: body.title },
-    contents: { en: body.message },
-    data: { ...(body.data ?? {}), url: deepLink, dedupe_id: dedupeId },
-    web_url: deepLink,
-    url: deepLink,
-  };
+async function loadSubscriptions(broadcast: boolean, userIds?: string[]): Promise<SubRow[]> {
+  let q = admin
+    .from("user_push_subscriptions")
+    .select("id,user_id,endpoint,p256dh,auth")
+    .is("revoked_at", null)
+    .not("endpoint", "is", null);
 
-  if (dedupeId) {
-    // Collapse re-sends of the same logical event on web/Android
-    payload.web_push_topic = dedupeId.slice(0, 40);
-    payload.collapse_id = dedupeId.slice(0, 40);
+  if (!broadcast && userIds && userIds.length > 0) {
+    q = q.in("user_id", userIds);
   }
+  const { data, error } = await q;
+  if (error) {
+    console.error("[dispatch] load subs failed", error);
+    return [];
+  }
+  return (data ?? []) as SubRow[];
+}
 
-  if (body.broadcast) {
-    payload.included_segments = ["Subscribed Users", "All"];
-  } else if (body.userIds?.length) {
-    payload.include_external_user_ids = body.userIds;
-    payload.include_aliases = { external_id: body.userIds };
-    payload.target_channel = "push";
-    payload.channel_for_external_user_ids = "push";
-  } else if (body.playerIds?.length) {
-    payload.include_player_ids = body.playerIds;
-  } else {
-    return { ok: false, result: { error: "no recipients" }, status: 400 };
+async function sendOne(sub: SubRow, payloadJSON: string): Promise<{ ok: boolean; status?: number; error?: string }> {
+  try {
+    const res = await webpush.sendNotification(
+      {
+        endpoint: sub.endpoint,
+        keys: { p256dh: sub.p256dh, auth: sub.auth },
+      },
+      payloadJSON,
+      { TTL: 60 * 60 * 24 },
+    );
+    return { ok: true, status: (res as any)?.statusCode ?? 201 };
+  } catch (e: any) {
+    const status = e?.statusCode ?? 0;
+    return { ok: false, status, error: e?.body ?? e?.message ?? String(e) };
   }
+}
 
-  // Retry up to 3 times with backoff
-  let lastErr: unknown = null;
-  for (let attempt = 0; attempt < 3; attempt++) {
-    try {
-      const res = await fetch("https://onesignal.com/api/v1/notifications", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Basic ${ONESIGNAL_REST_API_KEY}`,
-        },
-        body: JSON.stringify(payload),
-      });
-      const result = await res.json().catch(() => ({}));
-      if (res.ok && !(result as any)?.errors) {
-        return { ok: true, result, status: res.status };
-      }
-      lastErr = result;
-      if (res.status < 500) return { ok: false, result, status: res.status };
-    } catch (e) { lastErr = (e as Error).message; }
-    await new Promise(r => setTimeout(r, 250 * Math.pow(2, attempt)));
+async function markRevoked(ids: string[]) {
+  if (!ids.length) return;
+  await admin
+    .from("user_push_subscriptions")
+    .update({ revoked_at: new Date().toISOString() })
+    .in("id", ids);
+}
+
+async function incrementFailures(ids: string[]) {
+  if (!ids.length) return;
+  // Best-effort bump; ignore errors
+  for (const id of ids) {
+    await admin.rpc("noop").catch(() => {});
+    await admin
+      .from("user_push_subscriptions")
+      .update({ last_seen_at: new Date().toISOString() })
+      .eq("id", id)
+      .catch?.(() => {});
   }
-  return { ok: false, result: lastErr, status: 500 };
 }
 
 async function fireZapier(channel: ChannelKey, body: Payload, deepLink: string) {
@@ -174,8 +186,28 @@ async function logDispatch(row: Record<string, unknown>) {
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
+  // Simple status probe for the admin diagnostics card.
+  const url = new URL(req.url);
+  if (req.method === "GET" && url.searchParams.has("status")) {
+    return new Response(JSON.stringify({
+      chat_configured: !!Deno.env.get("ZAPIER_WEBHOOK_CHAT"),
+      gallery_post_configured: !!Deno.env.get("ZAPIER_WEBHOOK_GALLERY_POST"),
+      voice_note_configured: !!Deno.env.get("ZAPIER_WEBHOOK_VOICE_NOTE"),
+      youtube_post_configured: !!Deno.env.get("ZAPIER_WEBHOOK_YOUTUBE_POST"),
+      prayer_configured: !!Deno.env.get("ZAPIER_WEBHOOK_PRAYER"),
+      attendance_configured: !!Deno.env.get("ZAPIER_WEBHOOK_ATTENDANCE"),
+      vapid_configured: !!(VAPID_PUBLIC && VAPID_PRIVATE),
+    }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+  }
+
   let body: Payload | null = null;
   try {
+    if (!VAPID_PUBLIC || !VAPID_PRIVATE) {
+      return new Response(JSON.stringify({ error: "VAPID keys not configured" }), {
+        status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     body = (await req.json()) as Payload;
     if (!body?.title || !body?.message) {
       return new Response(JSON.stringify({ error: "title and message required" }), {
@@ -188,30 +220,62 @@ Deno.serve(async (req) => {
     const channel = pickChannel(body.data);
 
     const target_type = body.broadcast ? "broadcast"
-      : body.userIds?.length ? "external_user_ids"
-      : body.playerIds?.length ? "player_ids" : "none";
-    const target_value = body.broadcast ? ["Subscribed Users"] : body.userIds ?? body.playerIds ?? null;
+      : body.userIds?.length ? "external_user_ids" : "none";
+    const target_value = body.broadcast ? ["broadcast"] : body.userIds ?? null;
 
-    // Fire push + zapier in parallel
-    const [oneSignal, zapier] = await Promise.all([
-      callOneSignal(body, dedupeId, deepLink),
-      fireZapier(channel, body, deepLink),
-    ]);
+    // Build the push payload the service worker receives
+    const pushPayload = {
+      title: body.title,
+      body: body.message,
+      url: deepLink,
+      tag: dedupeId ?? undefined,
+      icon: body.icon ?? "/favicon.ico",
+      badge: "/favicon.ico",
+      image: body.image ?? undefined,
+      renotify: true,
+      data: {
+        ...(body.data ?? {}),
+        dedupe_id: dedupeId,
+        group_key: body.group_key ?? null,
+      },
+    };
+    const payloadJSON = JSON.stringify(pushPayload);
 
+    // Load matching subscriptions
+    const subs = await loadSubscriptions(!!body.broadcast, body.userIds);
+
+    // Send to all subs in parallel
+    const results = await Promise.all(subs.map((s) => sendOne(s, payloadJSON)));
+    const sent = results.filter(r => r.ok).length;
+    const revokedIds: string[] = [];
+    const failedIds: string[] = [];
+    results.forEach((r, i) => {
+      if (!r.ok) {
+        if (r.status === 404 || r.status === 410) revokedIds.push(subs[i].id);
+        else failedIds.push(subs[i].id);
+      }
+    });
+    if (revokedIds.length) await markRevoked(revokedIds);
+
+    // Fire Zapier in parallel (don't block on push)
+    const zapier = await fireZapier(channel, body, deepLink);
+
+    const ok = sent > 0 || subs.length === 0;
     await logDispatch({
       title: body.title, body: body.message, target_type, target_value,
       user_ids: body.userIds ?? null,
-      recipients: (oneSignal.result as any)?.recipients ?? null,
-      onesignal_id: (oneSignal.result as any)?.id ?? null,
-      status: oneSignal.ok ? "sent" : "failed",
+      recipients: sent,
+      status: subs.length === 0 ? "no_subscribers" : (sent > 0 ? "sent" : "failed"),
       channel,
-      error: oneSignal.ok ? null : JSON.stringify(oneSignal.result).slice(0, 500),
-      raw_response: { onesignal: oneSignal.result, zapier },
+      error: sent === 0 && subs.length > 0
+        ? JSON.stringify(results.slice(0, 5).map(r => ({ s: r.status, e: r.error?.slice(0, 120) }))).slice(0, 500)
+        : null,
+      raw_response: { sent, total: subs.length, revoked: revokedIds.length, zapier },
       request_payload: { ...body, dedupe_id: dedupeId, deepLink } as unknown as Record<string, unknown>,
     });
 
     return new Response(JSON.stringify({
-      ok: oneSignal.ok, channel, onesignal: oneSignal.result, zapier,
+      ok, channel, sent, total: subs.length, revoked: revokedIds.length, zapier,
     }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
   } catch (e) {
     await logDispatch({
