@@ -90,12 +90,12 @@ function absoluteUrl(maybe: string | null | undefined): string {
   return PRODUCTION_ORIGIN + (maybe.startsWith("/") ? maybe : "/" + maybe);
 }
 
-type SubRow = { id: string; user_id: string; endpoint: string; p256dh: string; auth: string };
+type SubRow = { id: string; user_id: string; endpoint: string; p256dh: string; auth: string; platform: string | null; player_id: string | null };
 
 async function loadSubscriptions(broadcast: boolean, userIds?: string[]): Promise<SubRow[]> {
   let q = admin
     .from("user_push_subscriptions")
-    .select("id,user_id,endpoint,p256dh,auth")
+    .select("id,user_id,endpoint,p256dh,auth,platform,player_id")
     .is("revoked_at", null)
     .not("endpoint", "is", null);
 
@@ -108,6 +108,41 @@ async function loadSubscriptions(broadcast: boolean, userIds?: string[]): Promis
     return [];
   }
   return (data ?? []) as SubRow[];
+}
+
+const ONESIGNAL_APP_ID = Deno.env.get("ONESIGNAL_APP_ID") ?? "";
+const ONESIGNAL_REST_API_KEY = Deno.env.get("ONESIGNAL_REST_API_KEY") ?? "";
+
+async function sendOneSignalNative(userIds: string[], body: Payload, deepLink: string, dedupeId: string | null) {
+  if (!ONESIGNAL_APP_ID || !ONESIGNAL_REST_API_KEY || userIds.length === 0) {
+    return { ok: false, skipped: true, reason: "no_keys_or_users" };
+  }
+  const payload: Record<string, unknown> = {
+    app_id: ONESIGNAL_APP_ID,
+    include_aliases: { external_id: userIds },
+    target_channel: "push",
+    headings: { en: body.title },
+    contents: { en: body.message },
+    android_channel_id: undefined,
+    data: { ...(body.data ?? {}), url: deepLink, dedupe_id: dedupeId },
+    url: deepLink,
+    collapse_id: dedupeId ?? undefined,
+    big_picture: body.image ?? undefined,
+  };
+  try {
+    const res = await fetch("https://api.onesignal.com/notifications", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Key ${ONESIGNAL_REST_API_KEY}`,
+      },
+      body: JSON.stringify(payload),
+    });
+    const json = await res.json().catch(() => ({}));
+    return { ok: res.ok, status: res.status, response: json };
+  } catch (e) {
+    return { ok: false, status: 0, error: (e as Error).message };
+  }
 }
 
 async function sendOne(sub: SubRow, payloadJSON: string): Promise<{ ok: boolean; status?: number; error?: string }> {
