@@ -95,7 +95,7 @@ async function registerAndroidChannels() {
 
 async function sendDeviceMetaToBackend(userId: string, oneSignalId: string | null) {
   try {
-    const info = await Device.getInfo();
+    const info = await Device.getInfo(); const appInfo = await CapApp.getInfo().catch(() => ({ version: null as string | null }));
     const id = await Device.getId();
     const lang = await Device.getLanguageCode();
     const payload = {
@@ -103,7 +103,7 @@ async function sendDeviceMetaToBackend(userId: string, oneSignalId: string | nul
       onesignal_id: oneSignalId,
       platform: 'android',
       os_version: info.osVersion,
-      app_version: info.appVersion ?? null,
+      app_version: appInfo.version ?? null,
       device_model: info.model,
       device_id: id.identifier,
       permission_granted: true,
@@ -117,7 +117,7 @@ async function sendDeviceMetaToBackend(userId: string, oneSignalId: string | nul
       endpoint: oneSignalId ? `onesignal:${oneSignalId}` : `device:${id.identifier}`,
       p256dh: '',
       auth: '',
-      user_agent: `capacitor-android/${info.appVersion ?? '1.0'} ${info.model}`,
+      user_agent: `capacitor-android/${appInfo.version ?? '1.0'} ${info.model}`,
       platform: 'android-native',
       metadata: payload,
     } as never, { onConflict: 'endpoint' } as never);
@@ -252,7 +252,7 @@ export async function unsubscribe() {
 export async function getDeviceState() {
   if (!isNative()) return { native: false as const };
   const os = OneSignal();
-  const info = await Device.getInfo();
+  const info = await Device.getInfo(); const appInfo = await CapApp.getInfo().catch(() => ({ version: null as string | null }));
   const id = await Device.getId();
   let oneSignalId: string | null = null;
   let pushToken: string | null = null;
@@ -270,7 +270,7 @@ export async function getDeviceState() {
     osVersion: info.osVersion,
     model: info.model,
     deviceId: id.identifier,
-    appVersion: info.appVersion,
+    appVersion: appInfo.version,
     oneSignalId,
     pushToken,
     optedIn,
