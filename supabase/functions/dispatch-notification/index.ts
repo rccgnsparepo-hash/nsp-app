@@ -259,8 +259,8 @@ Deno.serve(async (req) => {
 
   let body: Payload | null = null;
   try {
-    if (!VAPID_PUBLIC || !VAPID_PRIVATE) {
-      return new Response(JSON.stringify({ error: "VAPID keys not configured" }), {
+    if (!VAPID_PUBLIC && !VAPID_PRIVATE && !ONESIGNAL_REST_API_KEY) {
+      return new Response(JSON.stringify({ error: "No push provider configured (VAPID or OneSignal)" }), {
         status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
