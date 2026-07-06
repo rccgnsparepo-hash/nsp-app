@@ -125,11 +125,12 @@ async function sendDeviceMetaToBackend(userId: string, oneSignalId: string | nul
     await supabase.from('user_push_subscriptions').upsert({
       user_id: userId,
       endpoint: oneSignalId ? `onesignal:${oneSignalId}` : `device:${id.identifier}`,
+      player_id: oneSignalId,
       p256dh: '',
       auth: '',
       user_agent: `capacitor-android/${appInfo.version ?? '1.0'} ${info.model}`,
       platform: 'android-native',
-      metadata: payload,
+      last_seen_at: payload.last_sync,
     } as never, { onConflict: 'endpoint' } as never);
     localStorage.setItem('nsp_native_last_sync', payload.last_sync);
   } catch (e) {
