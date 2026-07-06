@@ -156,7 +156,9 @@ export async function initializeNotifications(handler?: NavHandler) {
 
   try {
     os.Debug?.setLogLevel?.(6);
-    os.initialize(ONESIGNAL_APP_ID);
+    const appId = await fetchOneSignalAppId();
+    if (!appId) { console.warn('[notif] no OneSignal app id available; aborting init'); return; }
+    os.initialize(appId);
 
     // Foreground listener — deliver payload to in-app banner and local storage.
     os.Notifications.addEventListener('foregroundWillDisplay', (event: any) => {
