@@ -5,6 +5,7 @@ import { Moon, Sun, Send, Users, Inbox, MessageCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
 import AppLayout from '@/components/AppLayout';
+import NativePushSettings from '@/components/NativePushSettings';
 import AppHeader from '@/components/AppHeader';
 import { Switch } from '@/components/ui/switch';
 import { Button } from '@/components/ui/button';
@@ -124,6 +125,7 @@ const SettingsPage = () => {
     <AppLayout>
       <AppHeader title="Settings" />
       <div className="p-4 space-y-4">
+        <NativePushSettings />
         <motion.div
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}

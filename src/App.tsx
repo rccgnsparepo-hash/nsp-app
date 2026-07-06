@@ -10,6 +10,7 @@ import NotificationOverlay from "@/components/NotificationOverlay";
 import IncomingCallOverlay from "@/components/IncomingCallOverlay";
 import SplashScreen from "@/components/SplashScreen";
 import PushDebugPanel from "@/components/PushDebugPanel";
+import { usePushNotifications } from "@/hooks/usePushNotifications";
 import Auth from "./pages/Auth";
 import HomePage from "./pages/HomePage";
 import PrayerPage from "./pages/PrayerPage";
@@ -30,6 +31,7 @@ const queryClient = new QueryClient();
 
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   const { user, loading, isAdmin } = useAuth();
+  usePushNotifications();
   if (loading) return <div className="min-h-screen bg-background flex items-center justify-center"><div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" /></div>;
   if (!user) return <Navigate to="/auth" replace />;
   return (
