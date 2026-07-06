@@ -100,7 +100,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   }, []);
 
   const signOut = async () => {
-    if (user) { try { await unsubscribePush(user.id); } catch {} }
+    if (user) {
+      try { await unsubscribePush(user.id); } catch {}
+      try { await osLogout(); } catch {}
+    }
     await supabase.auth.signOut();
     setUser(null);
     setSession(null);
