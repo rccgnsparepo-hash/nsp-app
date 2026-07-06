@@ -277,40 +277,51 @@ Deno.serve(async (req) => {
     const payloadJSON = JSON.stringify(pushPayload);
 
     // Load matching subscriptions
-    const subs = await loadSubscriptions(!!body.broadcast, body.userIds);
+    const allSubs = await loadSubscriptions(!!body.broadcast, body.userIds);
+    const webSubs = allSubs.filter(s => s.platform !== "android-native" && s.p256dh && s.auth);
+    const nativeUserIds = Array.from(new Set(allSubs.filter(s => s.platform === "android-native").map(s => s.user_id)));
 
-    // Send to all subs in parallel
-    const results = await Promise.all(subs.map((s) => sendOne(s, payloadJSON)));
+    // Send VAPID (web) subs in parallel
+    const results = await Promise.all(webSubs.map((s) => sendOne(s, payloadJSON)));
     const sent = results.filter(r => r.ok).length;
     const revokedIds: string[] = [];
     const failedIds: string[] = [];
     results.forEach((r, i) => {
       if (!r.ok) {
-        if (r.status === 404 || r.status === 410) revokedIds.push(subs[i].id);
-        else failedIds.push(subs[i].id);
+        if (r.status === 404 || r.status === 410) revokedIds.push(webSubs[i].id);
+        else failedIds.push(webSubs[i].id);
       }
     });
     if (revokedIds.length) await markRevoked(revokedIds);
 
+    // Send OneSignal native (Android) in one REST call per batch
+    const oneSignalResult = body.broadcast
+      ? await sendOneSignalBroadcast(body, deepLink, dedupeId)
+      : await sendOneSignalNative(nativeUserIds, body, deepLink, dedupeId);
+
     // Fire Zapier in parallel (don't block on push)
     const zapier = await fireZapier(channel, body, deepLink);
 
-    const ok = sent > 0 || subs.length === 0;
+    const nativeSent = oneSignalResult?.ok ? (nativeUserIds.length || (body.broadcast ? 1 : 0)) : 0;
+    const totalSent = sent + nativeSent;
+    const totalTargets = webSubs.length + nativeUserIds.length;
+    const ok = totalSent > 0 || totalTargets === 0;
     await logDispatch({
       title: body.title, body: body.message, target_type, target_value,
       user_ids: body.userIds ?? null,
-      recipients: sent,
-      status: subs.length === 0 ? "no_subscribers" : (sent > 0 ? "sent" : "failed"),
+      recipients: totalSent,
+      status: totalTargets === 0 ? "no_subscribers" : (totalSent > 0 ? "sent" : "failed"),
       channel,
-      error: sent === 0 && subs.length > 0
+      error: totalSent === 0 && totalTargets > 0
         ? JSON.stringify(results.slice(0, 5).map(r => ({ s: r.status, e: r.error?.slice(0, 120) }))).slice(0, 500)
         : null,
-      raw_response: { sent, total: subs.length, revoked: revokedIds.length, zapier },
+      raw_response: { sent, native_sent: nativeSent, total: totalTargets, revoked: revokedIds.length, zapier, onesignal: oneSignalResult },
       request_payload: { ...body, dedupe_id: dedupeId, deepLink } as unknown as Record<string, unknown>,
     });
 
     return new Response(JSON.stringify({
-      ok, channel, sent, total: subs.length, revoked: revokedIds.length, zapier,
+      ok, channel, sent: totalSent, web_sent: sent, native_sent: nativeSent,
+      total: totalTargets, revoked: revokedIds.length, zapier, onesignal: oneSignalResult,
     }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
   } catch (e) {
     await logDispatch({
