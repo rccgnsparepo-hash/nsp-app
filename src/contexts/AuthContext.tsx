@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useState, ReactNode } from 'react
 import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
 import { registerServiceWorker, ensurePushSubscription, installPushNavListener, unsubscribePush } from '@/lib/webpush';
+import { logout as osLogout } from '@/services/notificationService';
 
 interface AuthContextType {
   user: User | null;
