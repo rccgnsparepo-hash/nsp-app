@@ -10,6 +10,7 @@ import NotificationOverlay from "@/components/NotificationOverlay";
 import IncomingCallOverlay from "@/components/IncomingCallOverlay";
 import SplashScreen from "@/components/SplashScreen";
 import PushDebugPanel from "@/components/PushDebugPanel";
+import { usePushNotifications } from "@/hooks/usePushNotifications";
 import Auth from "./pages/Auth";
 import HomePage from "./pages/HomePage";
 import PrayerPage from "./pages/PrayerPage";
