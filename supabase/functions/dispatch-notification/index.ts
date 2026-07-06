@@ -145,6 +145,28 @@ async function sendOneSignalNative(userIds: string[], body: Payload, deepLink: s
   }
 }
 
+async function sendOneSignalBroadcast(body: Payload, deepLink: string, dedupeId: string | null) {
+  if (!ONESIGNAL_APP_ID || !ONESIGNAL_REST_API_KEY) return { ok: false, skipped: true };
+  try {
+    const res = await fetch("https://api.onesignal.com/notifications", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Key ${ONESIGNAL_REST_API_KEY}` },
+      body: JSON.stringify({
+        app_id: ONESIGNAL_APP_ID,
+        included_segments: ["Subscribed Users"],
+        headings: { en: body.title },
+        contents: { en: body.message },
+        data: { ...(body.data ?? {}), url: deepLink, dedupe_id: dedupeId },
+        url: deepLink,
+        collapse_id: dedupeId ?? undefined,
+        big_picture: body.image ?? undefined,
+      }),
+    });
+    const json = await res.json().catch(() => ({}));
+    return { ok: res.ok, status: res.status, response: json };
+  } catch (e) { return { ok: false, error: (e as Error).message }; }
+}
+
 async function sendOne(sub: SubRow, payloadJSON: string): Promise<{ ok: boolean; status?: number; error?: string }> {
   try {
     const res = await webpush.sendNotification(
