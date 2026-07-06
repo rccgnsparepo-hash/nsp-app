@@ -10,8 +10,18 @@ import { Network } from '@capacitor/network';
 import { LocalNotifications } from '@capacitor/local-notifications';
 import { supabase } from '@/integrations/supabase/client';
 
-// OneSignal App ID — this identifier is public/safe in client code.
-export const ONESIGNAL_APP_ID = 'YOUR_ONESIGNAL_APP_ID';
+// OneSignal App ID is a public identifier. We fetch it from the backend at boot
+// so the value stays configurable server-side (secret: ONESIGNAL_APP_ID).
+let ONESIGNAL_APP_ID: string | null = null;
+
+async function fetchOneSignalAppId(): Promise<string | null> {
+  if (ONESIGNAL_APP_ID) return ONESIGNAL_APP_ID;
+  try {
+    const { data, error } = await supabase.functions.invoke('get-onesignal-config');
+    if (!error && data?.appId) { ONESIGNAL_APP_ID = data.appId as string; return ONESIGNAL_APP_ID; }
+  } catch (e) { console.warn('[notif] cannot fetch OneSignal app id', e); }
+  return null;
+}
 
 type NavHandler = (path: string) => void;
 
