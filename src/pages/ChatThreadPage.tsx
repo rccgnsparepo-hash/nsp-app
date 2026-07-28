@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { format } from 'date-fns';
 import { uploadChatMedia, formatBytes, CHAT_MEDIA_LIMITS } from '@/lib/chatMedia';
+import { useMarkNotificationsRead } from '@/hooks/useNotificationCenter';
 
 interface Msg {
   id: string;
