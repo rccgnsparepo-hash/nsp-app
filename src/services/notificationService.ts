@@ -29,6 +29,10 @@ let initialized = false;
 let currentUserId: string | null = null;
 let navHandler: NavHandler | null = null;
 let retryTimer: ReturnType<typeof setTimeout> | null = null;
+const pendingClicks: string[] = [];
+
+const PENDING_ROUTE_KEY = 'nsp_pending_route';
+const PENDING_NID_KEY = 'nsp_pending_nid';
 
 const isNative = () => Capacitor.isNativePlatform();
 
@@ -194,7 +198,18 @@ export async function initializeNotifications(handler?: NavHandler) {
       try {
         const data = event?.notification?.additionalData ?? event?.result?.notification?.additionalData ?? {};
         const path = routeForPayload(data);
-        navHandler?.(path);
+        const nid = (data as any)?.dedupe_id ?? event?.notification?.notificationId ?? null;
+        // Always stash — the provider consumes on next boot; harmless if already handled.
+        try {
+          localStorage.setItem(PENDING_ROUTE_KEY, path);
+          if (nid) localStorage.setItem(PENDING_NID_KEY, String(nid));
+        } catch {}
+        if (navHandler) {
+          navHandler(path);
+          try { localStorage.removeItem(PENDING_ROUTE_KEY); } catch {}
+        } else {
+          pendingClicks.push(path);
+        }
       } catch (e) { console.warn('[notif] click handler failed', e); }
     });
 
@@ -323,7 +338,17 @@ export async function sendTokenToServer(userId: string) {
   }
 }
 
-export function setNavHandler(fn: NavHandler) { navHandler = fn; }
+export function setNavHandler(fn: NavHandler) {
+  navHandler = fn;
+  // Flush any buffered clicks that fired before the router mounted (cold-start).
+  if (pendingClicks.length) {
+    const clicks = pendingClicks.splice(0);
+    for (const path of clicks) {
+      try { fn(path); } catch {}
+    }
+    try { localStorage.removeItem(PENDING_ROUTE_KEY); } catch {}
+  }
+}
 
 /** Local persistence of the last N notifications (offline log). */
 const LOCAL_KEY = 'nsp_native_notifications_v1';

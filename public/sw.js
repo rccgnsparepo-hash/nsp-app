@@ -59,7 +59,7 @@ self.addEventListener('push', (event) => {
       badge,
       image,
       silent: !!silent,
-      data: { url, ...data },
+      data: { url, nid: tag || data?.dedupe_id || null, ...data },
       actions: Array.isArray(actions) ? actions : undefined,
     })
   );
@@ -67,22 +67,30 @@ self.addEventListener('push', (event) => {
 
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
-  const targetUrl = event.notification.data?.url || '/inbox';
+  const nid = event.notification.data?.nid || event.notification.tag || null;
+  let targetUrl = event.notification.data?.url || '/inbox';
+  // Append ?nid so the app can mark that notification read at boot (cold start).
+  if (nid) {
+    try {
+      const u = new URL(targetUrl, self.location.origin);
+      u.searchParams.set('nid', nid);
+      targetUrl = u.pathname + u.search + u.hash;
+    } catch {
+      targetUrl += (targetUrl.includes('?') ? '&' : '?') + 'nid=' + encodeURIComponent(nid);
+    }
+  }
   event.waitUntil((async () => {
     const all = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
-    // Try to focus an existing window on same origin
     for (const client of all) {
       try {
         const u = new URL(client.url);
         if (u.origin === self.location.origin) {
           await client.focus();
-          // Tell the page to route in-app without full reload
-          client.postMessage({ type: 'push:navigate', url: targetUrl });
+          client.postMessage({ type: 'push:navigate', url: targetUrl, nid });
           return;
         }
       } catch {}
     }
-    // No window open — open a new one
     if (self.clients.openWindow) {
       await self.clients.openWindow(targetUrl);
     }

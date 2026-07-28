@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { format } from 'date-fns';
 import { uploadChatMedia, formatBytes, CHAT_MEDIA_LIMITS } from '@/lib/chatMedia';
+import { useMarkNotificationsRead } from '@/hooks/useNotificationCenter';
 
 interface Msg {
   id: string;
@@ -46,6 +47,12 @@ const ChatThreadPage = () => {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const channelName = user && userId ? `chat:${[user.id, userId].sort().join(':')}` : null;
+
+  // Mark chat notifications from this peer as read on entry + focus.
+  useMarkNotificationsRead(
+    { kinds: ['message', 'call'], senderId: userId },
+    !!(user && userId),
+  );
 
   useEffect(() => {
     if (!userId) return;

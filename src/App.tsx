@@ -6,6 +6,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { NotificationsProvider } from "@/hooks/useRealtimeNotifications";
+import { NotificationCenterProvider } from "@/hooks/useNotificationCenter";
 import NotificationOverlay from "@/components/NotificationOverlay";
 import IncomingCallOverlay from "@/components/IncomingCallOverlay";
 import SplashScreen from "@/components/SplashScreen";
@@ -36,10 +37,12 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   if (!user) return <Navigate to="/auth" replace />;
   return (
     <NotificationsProvider>
-      <NotificationOverlay />
-      <IncomingCallOverlay />
-      {children}
-      {isAdmin && <PushDebugPanel />}
+      <NotificationCenterProvider>
+        <NotificationOverlay />
+        <IncomingCallOverlay />
+        {children}
+        {isAdmin && <PushDebugPanel />}
+      </NotificationCenterProvider>
     </NotificationsProvider>
   );
 };
