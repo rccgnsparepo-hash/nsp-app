@@ -248,8 +248,11 @@ const HomePage = () => {
                 post={post}
                 canDelete={canDelete}
                 onAskDelete={setPendingDelete}
+                highlighted={highlightId === post.id}
+                innerRef={(el) => { postRefs.current[post.id] = el; }}
               />
             );
+
           })
         ) : (
           <div className="text-center py-16">
