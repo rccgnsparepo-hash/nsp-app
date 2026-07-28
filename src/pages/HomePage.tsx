@@ -20,7 +20,7 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle
 } from '@/components/ui/alert-dialog';
 
-const PostCard = ({ post, canDelete, onAskDelete }: { post: any; canDelete: boolean; onAskDelete: (p: any) => void }) => {
+const PostCard = ({ post, canDelete, onAskDelete, highlighted, innerRef }: { post: any; canDelete: boolean; onAskDelete: (p: any) => void; highlighted?: boolean; innerRef?: (el: HTMLDivElement | null) => void }) => {
   const pressTimer = useRef<number | null>(null);
 
   const startPress = () => {
