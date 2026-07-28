@@ -48,6 +48,12 @@ const ChatThreadPage = () => {
 
   const channelName = user && userId ? `chat:${[user.id, userId].sort().join(':')}` : null;
 
+  // Mark chat notifications from this peer as read on entry + focus.
+  useMarkNotificationsRead(
+    { kinds: ['message', 'call'], senderId: userId },
+    !!(user && userId),
+  );
+
   useEffect(() => {
     if (!userId) return;
     supabase.from('profiles').select('id, full_name, profile_image_url').eq('id', userId).maybeSingle()
