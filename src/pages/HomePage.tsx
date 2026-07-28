@@ -37,6 +37,7 @@ const PostCard = ({ post, canDelete, onAskDelete, highlighted, innerRef }: { pos
 
   return (
     <motion.div
+      ref={innerRef}
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       onTouchStart={startPress}
@@ -46,8 +47,9 @@ const PostCard = ({ post, canDelete, onAskDelete, highlighted, innerRef }: { pos
       onMouseUp={cancelPress}
       onMouseLeave={cancelPress}
       onContextMenu={(e) => { if (canDelete) { e.preventDefault(); onAskDelete(post); } }}
-      className="neumorphic rounded-2xl overflow-hidden bg-card mb-4 select-none"
+      className={`neumorphic rounded-2xl overflow-hidden bg-card mb-4 select-none transition-all ${highlighted ? 'ring-2 ring-primary ring-offset-2 ring-offset-background' : ''}`}
     >
+
       {post.type === 'image' && post.image_url && (
         <img src={post.image_url} alt={post.caption || ''} className="w-full aspect-video object-cover" loading="lazy" draggable={false} />
       )}
