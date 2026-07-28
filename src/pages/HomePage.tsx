@@ -1,5 +1,6 @@
-import { useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { useEffect, useRef, useState } from 'react';
+import { Link, useSearchParams } from 'react-router-dom';
+
 import { motion } from 'framer-motion';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
@@ -19,7 +20,7 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle
 } from '@/components/ui/alert-dialog';
 
-const PostCard = ({ post, canDelete, onAskDelete }: { post: any; canDelete: boolean; onAskDelete: (p: any) => void }) => {
+const PostCard = ({ post, canDelete, onAskDelete, highlighted, innerRef }: { post: any; canDelete: boolean; onAskDelete: (p: any) => void; highlighted?: boolean; innerRef?: (el: HTMLDivElement | null) => void }) => {
   const pressTimer = useRef<number | null>(null);
 
   const startPress = () => {
@@ -36,6 +37,7 @@ const PostCard = ({ post, canDelete, onAskDelete }: { post: any; canDelete: bool
 
   return (
     <motion.div
+      ref={innerRef}
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       onTouchStart={startPress}
@@ -45,8 +47,9 @@ const PostCard = ({ post, canDelete, onAskDelete }: { post: any; canDelete: bool
       onMouseUp={cancelPress}
       onMouseLeave={cancelPress}
       onContextMenu={(e) => { if (canDelete) { e.preventDefault(); onAskDelete(post); } }}
-      className="neumorphic rounded-2xl overflow-hidden bg-card mb-4 select-none"
+      className={`neumorphic rounded-2xl overflow-hidden bg-card mb-4 select-none transition-all ${highlighted ? 'ring-2 ring-primary ring-offset-2 ring-offset-background' : ''}`}
     >
+
       {post.type === 'image' && post.image_url && (
         <img src={post.image_url} alt={post.caption || ''} className="w-full aspect-video object-cover" loading="lazy" draggable={false} />
       )}
@@ -76,12 +79,28 @@ const HomePage = () => {
   const { data: birthdays } = useBirthdays();
   const { data: resourcesList } = useResources();
   const { user, isAdmin } = useAuth();
+  const [searchParams] = useSearchParams();
+  const targetPostId = searchParams.get('post');
+  const postRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  const [highlightId, setHighlightId] = useState<string | null>(null);
 
   const [pendingDelete, setPendingDelete] = useState<any | null>(null);
   const [deleting, setDeleting] = useState(false);
 
   const upcomingBirthdays = birthdays?.slice(0, 3) ?? [];
   const todayBirthdays = birthdays?.filter(b => b.daysUntil === 0) ?? [];
+
+  useEffect(() => {
+    if (!targetPostId || !posts?.length) return;
+    const el = postRefs.current[targetPostId];
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      setHighlightId(targetPostId);
+      const t = setTimeout(() => setHighlightId(null), 2400);
+      return () => clearTimeout(t);
+    }
+  }, [targetPostId, posts]);
+
 
   const confirmDelete = async () => {
     if (!pendingDelete) return;
@@ -229,8 +248,11 @@ const HomePage = () => {
                 post={post}
                 canDelete={canDelete}
                 onAskDelete={setPendingDelete}
+                highlighted={highlightId === post.id}
+                innerRef={(el) => { postRefs.current[post.id] = el; }}
               />
             );
+
           })
         ) : (
           <div className="text-center py-16">

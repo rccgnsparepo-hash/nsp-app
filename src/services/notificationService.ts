@@ -49,28 +49,45 @@ interface OSPayload {
 const routeForPayload = (p: OSPayload | undefined | null): string => {
   if (!p) return '/inbox';
   if (p.route && typeof p.route === 'string') return p.route;
+  const postId = (p as any).post_id as string | undefined;
+  const peerId = (p as any).sender_id ?? (p as any).caller_id ?? p.chat_user_id;
   switch (p.type) {
     case 'chat':
     case 'message':
-      return p.chat_user_id ? `/chat/${p.chat_user_id}` : '/chats';
-    case 'prayer':          return '/prayer';
-    case 'gallery':
+    case 'call':
+      return peerId ? `/chat/${peerId}` : '/chats';
+    case 'prayer':
+    case 'prayer_interaction': return '/prayer';
+    case 'gallery':             return '/gallery';
     case 'post':
+    case 'post_like':
+    case 'post_comment':
+    case 'repost':
+    case 'mention':
+    case 'reply':
     case 'image':
     case 'video':
     case 'voice':
-    case 'youtube':         return '/';
-    case 'announcement':
-    case 'admin':           return '/admin';
-    case 'result':          return '/inbox';
-    case 'assignment':      return '/inbox';
-    case 'payment':         return '/settings';
-    case 'course':          return '/';
-    case 'profile':         return '/profile';
-    case 'support':         return '/settings';
-    default:                return '/inbox';
+    case 'youtube':
+    case 'live':
+    case 'announcement':        return postId ? `/?post=${postId}` : '/';
+    case 'follow':              return (p as any).follower_id ? `/u/${(p as any).follower_id}` : '/inbox';
+    case 'community':
+    case 'community_invite':    return '/inbox';
+    case 'admin':               return '/inbox';
+    case 'result':              return '/inbox';
+    case 'assignment':          return '/inbox';
+    case 'attendance_session':
+    case 'attendance_review':
+    case 'attendance_pending':  return '/profile?tab=attendance';
+    case 'payment':             return '/settings';
+    case 'course':              return '/';
+    case 'profile':             return (p as any).user_id ? `/u/${(p as any).user_id}` : '/profile';
+    case 'support':             return '/settings';
+    default:                    return '/inbox';
   }
 };
+
 
 const ANDROID_CHANNELS = [
   { id: 'general',     name: 'General',     description: 'General notifications',        importance: 4, sound: 'default', vibration: true, lights: true, visibility: 1 },
