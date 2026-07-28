@@ -139,29 +139,38 @@ const InboxPage = () => {
     const d = n.data ?? {};
     switch (n.kind) {
       case 'message':
-      case 'call':
-        if (d.sender_id || d.caller_id) return navigate(`/chat/${d.sender_id ?? d.caller_id}`);
-        break;
+      case 'call': {
+        const peer = d.sender_id ?? d.caller_id ?? d.user_id;
+        return navigate(peer ? `/chat/${peer}` : '/chats');
+      }
       case 'post':
       case 'post_like':
       case 'post_comment':
       case 'repost':
+      case 'mention':
+      case 'reply':
         return navigate(d.post_id ? `/?post=${d.post_id}` : '/');
       case 'follow':
-        return navigate(d.follower_id ? `/u/${d.follower_id}` : '/');
+        return navigate(d.follower_id ? `/u/${d.follower_id}` : '/inbox');
       case 'prayer':
       case 'prayer_interaction':
         return navigate('/prayer');
       case 'live':
-        return navigate(d.live_id ? `/live/${d.live_id}` : '/');
+        // No dedicated live route yet — deep-link to home which surfaces live posts.
+        return navigate(d.post_id ? `/?post=${d.post_id}` : '/');
       case 'community_invite':
-        return navigate(d.community_id ? `/community/${d.community_id}` : '/');
+      case 'community':
+        // No community route yet — surface it inside the inbox for now.
+        return navigate('/inbox');
+      case 'announcement':
+        return navigate(d.post_id ? `/?post=${d.post_id}` : '/');
       case 'attendance_session':
       case 'attendance_review':
       case 'attendance_pending':
         return navigate('/profile?tab=attendance');
     }
     navigate('/');
+
   };
 
   const markAllRead = async () => {
