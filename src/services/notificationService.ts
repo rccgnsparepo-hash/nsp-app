@@ -338,7 +338,17 @@ export async function sendTokenToServer(userId: string) {
   }
 }
 
-export function setNavHandler(fn: NavHandler) { navHandler = fn; }
+export function setNavHandler(fn: NavHandler) {
+  navHandler = fn;
+  // Flush any buffered clicks that fired before the router mounted (cold-start).
+  if (pendingClicks.length) {
+    const clicks = pendingClicks.splice(0);
+    for (const path of clicks) {
+      try { fn(path); } catch {}
+    }
+    try { localStorage.removeItem(PENDING_ROUTE_KEY); } catch {}
+  }
+}
 
 /** Local persistence of the last N notifications (offline log). */
 const LOCAL_KEY = 'nsp_native_notifications_v1';
