@@ -134,6 +134,19 @@ export const NotificationCenterProvider = ({ children }: { children: ReactNode }
     } catch {}
   }, [user?.id, navigate, markRead]);
 
+  // Listen for in-session SW notification taps (existing window focused).
+  useEffect(() => {
+    if (!user) return;
+    if (typeof navigator === 'undefined' || !('serviceWorker' in navigator)) return;
+    const onMsg = (event: MessageEvent) => {
+      const d: any = event.data;
+      if (!d || d.type !== 'push:navigate') return;
+      if (d.nid) markRead({ dedupe_id: String(d.nid) });
+    };
+    navigator.serviceWorker.addEventListener('message', onMsg);
+    return () => navigator.serviceWorker.removeEventListener('message', onMsg);
+  }, [user?.id, markRead]);
+
   return (
     <NotificationCenterContext.Provider value={{ unread, refresh, markRead, markAllRead }}>
       {children}
