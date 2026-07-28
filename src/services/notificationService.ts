@@ -29,6 +29,10 @@ let initialized = false;
 let currentUserId: string | null = null;
 let navHandler: NavHandler | null = null;
 let retryTimer: ReturnType<typeof setTimeout> | null = null;
+const pendingClicks: string[] = [];
+
+const PENDING_ROUTE_KEY = 'nsp_pending_route';
+const PENDING_NID_KEY = 'nsp_pending_nid';
 
 const isNative = () => Capacitor.isNativePlatform();
 
