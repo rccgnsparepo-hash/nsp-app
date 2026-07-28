@@ -79,12 +79,28 @@ const HomePage = () => {
   const { data: birthdays } = useBirthdays();
   const { data: resourcesList } = useResources();
   const { user, isAdmin } = useAuth();
+  const [searchParams] = useSearchParams();
+  const targetPostId = searchParams.get('post');
+  const postRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  const [highlightId, setHighlightId] = useState<string | null>(null);
 
   const [pendingDelete, setPendingDelete] = useState<any | null>(null);
   const [deleting, setDeleting] = useState(false);
 
   const upcomingBirthdays = birthdays?.slice(0, 3) ?? [];
   const todayBirthdays = birthdays?.filter(b => b.daysUntil === 0) ?? [];
+
+  useEffect(() => {
+    if (!targetPostId || !posts?.length) return;
+    const el = postRefs.current[targetPostId];
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      setHighlightId(targetPostId);
+      const t = setTimeout(() => setHighlightId(null), 2400);
+      return () => clearTimeout(t);
+    }
+  }, [targetPostId, posts]);
+
 
   const confirmDelete = async () => {
     if (!pendingDelete) return;
