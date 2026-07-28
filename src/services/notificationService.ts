@@ -198,7 +198,18 @@ export async function initializeNotifications(handler?: NavHandler) {
       try {
         const data = event?.notification?.additionalData ?? event?.result?.notification?.additionalData ?? {};
         const path = routeForPayload(data);
-        navHandler?.(path);
+        const nid = (data as any)?.dedupe_id ?? event?.notification?.notificationId ?? null;
+        // Always stash — the provider consumes on next boot; harmless if already handled.
+        try {
+          localStorage.setItem(PENDING_ROUTE_KEY, path);
+          if (nid) localStorage.setItem(PENDING_NID_KEY, String(nid));
+        } catch {}
+        if (navHandler) {
+          navHandler(path);
+          try { localStorage.removeItem(PENDING_ROUTE_KEY); } catch {}
+        } else {
+          pendingClicks.push(path);
+        }
       } catch (e) { console.warn('[notif] click handler failed', e); }
     });
 
