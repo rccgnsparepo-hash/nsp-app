@@ -37,10 +37,12 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   if (!user) return <Navigate to="/auth" replace />;
   return (
     <NotificationsProvider>
-      <NotificationOverlay />
-      <IncomingCallOverlay />
-      {children}
-      {isAdmin && <PushDebugPanel />}
+      <NotificationCenterProvider>
+        <NotificationOverlay />
+        <IncomingCallOverlay />
+        {children}
+        {isAdmin && <PushDebugPanel />}
+      </NotificationCenterProvider>
     </NotificationsProvider>
   );
 };
